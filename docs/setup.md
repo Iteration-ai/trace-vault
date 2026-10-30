@@ -118,7 +118,7 @@ shipping-container/installed-collector rehearsal (`node scripts/rehearse.mjs`).
 The initial release has no predecessor; same-version replacement is verified,
 not a claim of compatibility with a previously released vault schema.
 
-## Releases (operator-controlled)
+## Releases (automatic on version tags)
 
 The intended package is `@iteration-ai/trace-vault-collector@0.1.0`; the intended image
 is `ghcr.io/iteration-ai/trace-vault:v0.1.0` (Linux amd64). Neither exists by virtue of
@@ -126,39 +126,51 @@ adding these workflows. `VAULT_IMAGE` selects a release image; the default is
 `trace-vault:local`. After a verified release, use `VAULT_IMAGE` with Compose
 `pull` and `up --no-build --detach --wait` rather than rebuilding that tag.
 
-The provenance-enabled release requires a public source repository. GitHub also
-limits environment and ruleset protection on private repositories by plan; do
-not treat the workflow's `environment: release` as an approval gate until its
-protection rules are configured and verified.
+### One-time npm setup
 
-Before any publication, repository administrators must:
+1. Sign in to npm with an account that can publish under the `@iteration-ai` scope.
+   GitHub organization ownership does not grant npm scope ownership.
+2. In npm, open **Access Tokens → Generate New Token**. Name it `trace-vault-release`.
+   Under **Packages and scopes**, choose **Read and write (publish and stage)**,
+   then **Only select packages and scopes** and select the `@iteration-ai` scope.
+   Enable **Bypass two-factor authentication** for unattended publishing. Leave
+   organization-management access disabled. Choose an expiry and rotate the token
+   before it expires. See [npm's token guide](https://docs.npmjs.com/creating-and-viewing-access-tokens).
+3. Open the repository's **Settings → Secrets and variables → Actions → New
+   repository secret**. Set the name to `NPM_TOKEN` and paste the token as its value.
+   Never put this token in a commit, command argument or issue/thread message.
 
-1. Create the GitHub **`release` environment**, require an approving reviewer,
-   disallow self-approval and restrict deployment refs to release tags. Protect
-   release tags against mutation. The workflow names an environment but cannot
-   itself configure GitHub's approval policy; do not dispatch until this is set.
-2. Confirm the company owns the `@iteration-ai` npm organization and grant its
-   release publisher access to `@iteration-ai/trace-vault-collector`. GitHub
-   organization ownership does not grant npm scope ownership. Configure npm
-   trusted publishing for repository `Iteration-ai/trace-vault`, workflow
-   `release.yml`, environment `release`. This uses OIDC (`id-token: write`) with
-   npm 11.19.1, not a stored npm token. If npm cannot
-   configure a trusted publisher before the package exists, an authorized npm
-   owner must separately bootstrap package ownership before this workflow is
-   usable. No bootstrap publication is automated here. Enable direct `npm publish`
-   for this trusted publisher, and configure it close to release: npm expires an
-   unvalidated connection if its first successful publish is not within two days.
-3. Enable the repository's `GITHUB_TOKEN` permission to publish its GHCR package.
-   Set package visibility deliberately if anonymous pulls are intended.
+This token can publish the first package version as well as later versions; there
+is no separate package-bootstrap publish, npm trusted-publisher setup or release
+environment approval step. The repository must be public for npm provenance.
+GitHub releases and GHCR use the workflow's built-in `GITHUB_TOKEN`, not a personal
+GitHub token. The publish job requests only contents/packages write and OIDC for
+provenance. For anonymous image pulls, set the GHCR package's visibility to public
+after its first publication; public repository visibility alone does not do that.
 
-An operator updates root, collector and server versions together, creates the
-matching existing `vX.Y.Z` tag, then manually dispatches **Release** with both the
-workflow ref and `tag` input set to that tag. Initial push and tag creation only
-run verification; **publication is never triggered by either**. Preflight rejects
-branch dispatch and tag/version/SHA mismatches. Builds, tests and container health
-must pass before approval. After approval, checksums and image identity/revision
-are rechecked and the exact tested tarball/image are published, followed by a
-GitHub release. Contracts are never published. Tags are versioned, not `latest`.
+### Publish a version
+
+Update the root, collector and server versions together, then commit and push the
+reviewed changes to `main`. Push the matching `vX.Y.Z` tag. For the initial version:
+
+```sh
+git tag -a v0.1.0 -m "Trace Vault v0.1.0"
+git push origin v0.1.0
+```
+
+**Pushing the version tag starts publication automatically.** Branch pushes only
+run verification. Preflight rejects branch dispatch, invalid tags, version/SHA
+mismatches and missing/invalid npm credentials before the full build. All builds,
+tests, secret scanning, packaged-collector checks and container rehearsals must
+pass. Checksums and image identity/revision are then rechecked before publishing
+the tested collector, container and GitHub release. Contracts are never published.
+There is no additional manual approval after the tag push. Restrict tag creation
+to trusted maintainers using repository rules where available, and never move or
+delete a published version tag. Container tags are versioned, not `latest`.
+
+Manual **Release** dispatch remains available on an existing version tag: both the
+workflow ref and `tag` input must select that tag. Do not use it to blindly retry a
+partially successful publication.
 
 Registries are separate systems: npm, GHCR and GitHub publication is not atomic.
 If a later step fails, inspect the actual published state before retrying; never

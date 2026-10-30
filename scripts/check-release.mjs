@@ -7,7 +7,7 @@ assert.match(tag ?? "", /^v\d+\.\d+\.\d+$/);
 assert.equal(
 	process.env.GITHUB_REF,
 	`refs/tags/${tag}`,
-	"Dispatch the workflow on the existing release tag, not a branch.",
+	"Run the release workflow on the matching version tag, not a branch.",
 );
 const taggedCommit = execFileSync(
 	"git",
