@@ -10,8 +10,8 @@
 	},
 	"packageManager": "pnpm@10.20.0",
 	"scripts": {
-		"build": "pnpm --filter iteration-trace-contracts build && pnpm --filter @thytu/trace-vault-collector build && pnpm --filter trace-vault build",
-		"typecheck": "tsc --noEmit && pnpm --filter iteration-trace-contracts exec tsc --noEmit && pnpm --filter @thytu/trace-vault-collector exec tsc --noEmit && pnpm --filter trace-vault exec tsc --noEmit",
+		"build": "pnpm --filter iteration-trace-contracts build && pnpm --filter @iteration-ai/trace-vault-collector build && pnpm --filter trace-vault build",
+		"typecheck": "tsc --noEmit && pnpm --filter iteration-trace-contracts exec tsc --noEmit && pnpm --filter @iteration-ai/trace-vault-collector exec tsc --noEmit && pnpm --filter trace-vault exec tsc --noEmit",
 		"test": "node --import=tsx --test packages/trace-contracts/src/*.test.ts packages/cli/src/*.test.ts packages/vault/src/*.test.ts",
 		"pack:collector": "node scripts/pack-collector.mjs",
 		"smoke:collector": "node scripts/smoke-collector.mjs",

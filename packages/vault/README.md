@@ -34,7 +34,7 @@ collection. Neither an LLM nor a classifier decides whether a trace is work.
 
 ## Self-hosting
 
-The repository's [setup guide](../../README.md#quickstart-build-from-source) owns build,
+The repository's [setup guide](../../docs/setup.md#quickstart-build-from-source) owns build,
 Docker, collector and verification commands. The Compose deployment contains only
 the vault and PostgreSQL. It does not start Clerk, Vercel, Infisical, a vector
 database or a model server. The Node runtime image is unprivileged and pinned by

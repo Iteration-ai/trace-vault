@@ -125,7 +125,7 @@ password recovery deliberately does not erase evidence or revoke collector token
 
 ## Reproduce the release rehearsal
 
-On Linux with Node/pnpm from the root README, Docker Compose, `git` and the
+On Linux with Node/pnpm from the [setup guide](setup.md#build-the-collector), Docker Compose, `git` and the
 util-linux `script` command installed:
 
 ```sh

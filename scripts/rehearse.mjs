@@ -163,7 +163,7 @@ try {
 	await compose(primary, "build", "vault");
 	await run("pnpm", [
 		"--filter",
-		"@thytu/trace-vault-collector",
+		"@iteration-ai/trace-vault-collector",
 		"pack",
 		"--pack-destination",
 		scratch,

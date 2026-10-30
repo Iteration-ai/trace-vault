@@ -8,7 +8,8 @@ of unsupported account evidence.
 Use Node 22.22.0 and pnpm 10.20.0. Run frozen install, `pnpm build`,
 `pnpm typecheck`, `pnpm test`, `pnpm pack:collector` and `pnpm smoke:collector`.
 Supply a disposable local PostgreSQL 17 URL as `VAULT_TEST_DATABASE_URL` so vault
-tests actually run; see README. Include focused behavioral tests for changes.
+tests actually run; see [verification](docs/setup.md#verification).
+Include focused behavioral tests for changes.
 Never use production data or credentials in fixtures.
 
 Preserve exact dependency pins and regenerate `pnpm-lock.yaml` with pnpm when

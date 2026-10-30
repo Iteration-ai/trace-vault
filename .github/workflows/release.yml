@@ -74,7 +74,7 @@ jobs:
       - name: Publish the tested collector using npm OIDC
         run: |
           VERSION="$(node -p 'require("./packages/cli/package.json").version')"
-          npm publish "artifacts/thytu-trace-vault-collector-${VERSION}.tgz" --access public --provenance
+          npm publish "artifacts/iteration-ai-trace-vault-collector-${VERSION}.tgz" --access public --provenance
       - name: Publish the tested server image using GITHUB_TOKEN
         env:
           GH_TOKEN: ${{ github.token }}
@@ -91,4 +91,4 @@ jobs:
         run: |
           gh release create "$RELEASE_TAG" --verify-tag --target "$GITHUB_SHA" \
             --title "Trace Vault $RELEASE_TAG" --generate-notes \
-            artifacts/thytu-trace-vault-collector-*.tgz artifacts/SHA256SUMS artifacts/image-id.txt
+            artifacts/iteration-ai-trace-vault-collector-*.tgz artifacts/SHA256SUMS artifacts/image-id.txt
