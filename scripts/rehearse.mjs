@@ -392,9 +392,9 @@ try {
 	)
 		.toString()
 		.trim();
-	assert.equal(migrationCount, "2");
+	assert.equal(migrationCount, "3");
 	process.stdout.write(
-		"PASS ongoing collection, idempotent retries, restart + current-version replacement (2 migrations retained)\n",
+		"PASS ongoing collection, idempotent retries, restart + current-version replacement (3 migrations retained)\n",
 	);
 
 	const deletedEvents = expectedExport

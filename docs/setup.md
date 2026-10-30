@@ -126,6 +126,11 @@ adding these workflows. `VAULT_IMAGE` selects a release image; the default is
 `trace-vault:local`. After a verified release, use `VAULT_IMAGE` with Compose
 `pull` and `up --no-build --detach --wait` rather than rebuilding that tag.
 
+The provenance-enabled release requires a public source repository. GitHub also
+limits environment and ruleset protection on private repositories by plan; do
+not treat the workflow's `environment: release` as an approval gate until its
+protection rules are configured and verified.
+
 Before any publication, repository administrators must:
 
 1. Create the GitHub **`release` environment**, require an approving reviewer,
@@ -140,7 +145,9 @@ Before any publication, repository administrators must:
    npm 11.19.1, not a stored npm token. If npm cannot
    configure a trusted publisher before the package exists, an authorized npm
    owner must separately bootstrap package ownership before this workflow is
-   usable. No bootstrap publication is automated here.
+   usable. No bootstrap publication is automated here. Enable direct `npm publish`
+   for this trusted publisher, and configure it close to release: npm expires an
+   unvalidated connection if its first successful publish is not within two days.
 3. Enable the repository's `GITHUB_TOKEN` permission to publish its GHCR package.
    Set package visibility deliberately if anonymous pulls are intended.
 
