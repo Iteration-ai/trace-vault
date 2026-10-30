@@ -88,7 +88,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="$(node -p 'require("./packages/cli/package.json").version')"
-          npm publish "artifacts/useiteration-trace-vault-collector-${VERSION}.tgz" --access public --provenance
+          npm publish "./artifacts/useiteration-trace-vault-collector-${VERSION}.tgz" --access public --provenance
       - name: Publish the tested server image using GITHUB_TOKEN
         env:
           GH_TOKEN: ${{ github.token }}
