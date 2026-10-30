@@ -3,13 +3,13 @@ import { createHash, randomUUID } from "node:crypto";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { type TestContext, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { test, type TestContext } from "node:test";
 import type { TraceEvent } from "iteration-trace-contracts";
 import { Pool } from "pg";
 import { migrateVault } from "./migrate.js";
 import { VaultStore } from "./store.js";
-import { VaultStoreError, type VaultCaller } from "./store-contracts.js";
+import { type VaultCaller, VaultStoreError } from "./store-contracts.js";
 
 const databaseUrl = process.env.VAULT_TEST_DATABASE_URL;
 const tokenHash = (value: string) =>
@@ -484,7 +484,7 @@ test("session titles fall back to the first nonempty user message, never assista
 	);
 });
 
-test("existing archives acquire user-message title fallbacks without changing source titles or trace payloads", {
+test("existing archives retain titles, public identities and exports through an interrupted, resumed storage upgrade", {
 	skip: !databaseUrl,
 }, async (context) => {
 	const legacy = await mkdtemp(path.join(tmpdir(), "vault-title-migration-"));
@@ -503,6 +503,7 @@ test("existing archives acquire user-message title fallbacks without changing so
 		device,
 		policy,
 		memberCaller,
+		deviceCaller,
 		databaseUrl: url,
 	} = await fixture(context, false, legacy);
 	const cases: {
@@ -585,9 +586,96 @@ test("existing archives acquire user-message title fallbacks without changing so
 			);
 		}
 	}
+	await pool.query(
+		"INSERT INTO vault.trace_sessions (member_id, source, source_session_id, title, event_count) VALUES ($1, 'claude', 'upgrade-batches', 'Batch archive', 55)",
+		[member.id],
+	);
+	for (let index = 1; index <= 55; index++) {
+		const original: TraceEvent = {
+			...event(
+				index === 55 ? "upgrade-stop" : `upgrade-${index}`,
+				policy.revision,
+				"upgrade-batches",
+			),
+			eventType: "source_record",
+			sequence: index,
+			payload: { sourceType: "synthetic", text: `Retained ${index}` },
+		};
+		await pool.query(
+			"INSERT INTO vault.trace_events (id, member_id, source, source_session_id, event_id, sequence, device_id, payload, capture_authorization, policy_revision, created_at) VALUES ($1, $2, 'claude', $3, $4, $5, $6, $7, $8, $9, '2025-01-02T03:04:05.123456Z')",
+			[
+				index === 55
+					? "ffffffff-ffff-4fff-bfff-ffffffffffff"
+					: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+				member.id,
+				original.sessionId,
+				original.eventId,
+				index,
+				device.id,
+				original,
+				original.capture,
+				policy.revision,
+			],
+		);
+	}
 	const before = (
-		await pool.query("SELECT payload FROM vault.trace_events ORDER BY event_id")
+		await pool.query(
+			"SELECT id, payload, device_id, created_at FROM vault.trace_events ORDER BY event_id",
+		)
 	).rows;
+	const sessionIds = (
+		await pool.query("SELECT id, source_session_id FROM vault.trace_sessions")
+	).rows;
+	await pool.query(
+		"INSERT INTO vault.session_tombstones (member_id, source, source_session_id) VALUES ($1, 'claude', 'deleted-before-upgrade')",
+		[member.id],
+	);
+	await pool.query(
+		"INSERT INTO vault.event_tombstones (member_id, source, event_id) VALUES ($1, 'claude', 'event-deleted-before-upgrade')",
+		[member.id],
+	);
+	const interrupted = await mkdtemp(
+		path.join(tmpdir(), "vault-storage-interruption-"),
+	);
+	context.after(() => rm(interrupted, { recursive: true, force: true }));
+	await cp(migrationsDirectory, interrupted, { recursive: true });
+	const upgradeFile = path.join(interrupted, "0003_canonical_trace_engine.sql");
+	await writeFile(
+		upgradeFile,
+		`${await readFile(upgradeFile, "utf8")}
+--> statement-breakpoint
+CREATE FUNCTION vault.interrupt_upgrade() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.event_id = 'upgrade-stop' THEN RAISE EXCEPTION 'synthetic interruption'; END IF;
+  RETURN NEW;
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER interrupt_upgrade BEFORE INSERT ON vault.event_receipts FOR EACH ROW EXECUTE FUNCTION vault.interrupt_upgrade();
+`,
+	);
+	await assert.rejects(
+		migrateVault(url, interrupted),
+		/Vault database migration failed/,
+	);
+	assert.equal(
+		(
+			await pool.query(
+				"SELECT count(*)::int AS count FROM vault.event_receipts",
+			)
+		).rows[0].count,
+		50,
+	);
+	assert.equal(
+		(
+			await pool.query(
+				"SELECT count(*)::int AS count FROM vault.legacy_trace_events",
+			)
+		).rows[0].count,
+		before.length,
+	);
+	await pool.query(
+		"DROP TRIGGER interrupt_upgrade ON vault.event_receipts; DROP FUNCTION vault.interrupt_upgrade()",
+	);
 	await migrateVault(url, migrationsDirectory);
 	await migrateVault(url, migrationsDirectory);
 	for (const row of cases) {
@@ -602,14 +690,112 @@ test("existing archives acquire user-message title fallbacks without changing so
 			row.expected,
 		);
 	}
+	for (const session of sessionIds) {
+		assert.equal(
+			(await store.getSessionById(memberCaller, session.id)).sourceSessionId,
+			session.source_session_id,
+		);
+	}
+	const after = (await store.readEvents(memberCaller, null, { limit: 200 }))
+		.items;
 	assert.deepEqual(
-		(
-			await pool.query(
-				"SELECT payload FROM vault.trace_events ORDER BY event_id",
-			)
-		).rows,
-		before,
+		new Map(
+			after.map((row) => [
+				row.id,
+				{
+					payload: row.payload,
+					deviceId: row.deviceId,
+					createdAt: row.createdAt,
+				},
+			]),
+		),
+		new Map(
+			before.map((row) => [
+				row.id,
+				{
+					payload: row.payload,
+					deviceId: row.device_id,
+					createdAt: row.created_at,
+				},
+			]),
+		),
 	);
+	assert.equal(
+		(
+			await store.ingest(deviceCaller, policy.revision, [
+				event(
+					"new-id-in-deleted-session",
+					policy.revision,
+					"deleted-before-upgrade",
+				),
+				event(
+					"event-deleted-before-upgrade",
+					policy.revision,
+					"renamed-after-upgrade",
+				),
+			])
+		).insertedCount,
+		0,
+	);
+});
+
+test("vault uses canonical streaming usage replacement without duplicating sessions or replacing ordinary retries", {
+	skip: !databaseUrl,
+}, async (context) => {
+	const { store, member, memberCaller, deviceCaller, policy } =
+		await fixture(context);
+	const usage = (output: number, sequence: number): TraceEvent => ({
+		...event("streaming-usage", policy.revision),
+		eventType: "token_usage_record",
+		sequence,
+		payload: {
+			model: "synthetic",
+			usage: { input_tokens: 23, output_tokens: output },
+		},
+	});
+	const best = usage(13, 7);
+	assert.equal(
+		(
+			await store.ingest(deviceCaller, policy.revision, [
+				usage(5, 3),
+				best,
+				usage(8, 8),
+			])
+		).insertedCount,
+		1,
+	);
+	const identity = {
+		memberId: member.id,
+		source: "claude" as const,
+		sourceSessionId: "source-session",
+	};
+	assert.deepEqual(
+		(await store.readEvents(memberCaller, identity)).items[0]?.payload,
+		best,
+	);
+	const later = usage(13, 9);
+	assert.equal(
+		(await store.ingest(deviceCaller, policy.revision, [later])).insertedCount,
+		0,
+	);
+	await store.ingest(deviceCaller, policy.revision, [usage(6, 20)]);
+	await store.ingest(deviceCaller, policy.revision, [usage(13, 8)]);
+	assert.deepEqual(
+		(await store.readEvents(memberCaller, identity)).items[0]?.payload,
+		later,
+	);
+	const original = event("ordinary-retry", policy.revision);
+	await store.ingest(deviceCaller, policy.revision, [
+		original,
+		{ ...original, payload: { title: "Must not replace first capture" } },
+	]);
+	assert.deepEqual(
+		(await store.readEvents(memberCaller, identity)).items.find(
+			(row) => row.eventId === original.eventId,
+		)?.payload,
+		original,
+	);
+	assert.equal((await store.getSession(memberCaller, identity)).eventCount, 2);
 });
 
 test("vault policy changes fence ingestion and proofs require approved references", {

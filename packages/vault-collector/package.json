@@ -1,0 +1,28 @@
+{
+	"name": "@useiteration/trace-vault-collector",
+	"version": "0.1.1",
+	"type": "module",
+	"license": "Apache-2.0",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Iteration-ai/trace-vault.git",
+		"directory": "packages/vault-collector"
+	},
+	"engines": {
+		"node": ">=22"
+	},
+	"files": [
+		"dist",
+		"LICENSE",
+		"NOTICE"
+	],
+	"bin": {
+		"trace-vault": "./dist/vault-cli.js"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"build": "pnpm --filter iteration-trace-contracts build && pnpm --filter iteration-cli exec tsc --noEmit && node build.mjs"
+	}
+}

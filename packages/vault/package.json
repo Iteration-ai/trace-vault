@@ -1,6 +1,6 @@
 {
 	"name": "trace-vault",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"private": true,
 	"type": "module",
 	"license": "Apache-2.0",
@@ -11,13 +11,14 @@
 		"trace-vault-server": "./dist/main.js"
 	},
 	"scripts": {
-		"build": "pnpm --filter iteration-trace-contracts build && node build.mjs && tsc --noEmit",
+		"build": "pnpm --filter iteration-trace-contracts build && pnpm --filter iteration-trace-postgres build && node build.mjs && tsc --noEmit",
 		"start": "node dist/main.js",
 		"test": "node --import=tsx --test src/*.test.ts"
 	},
 	"dependencies": {
 		"drizzle-orm": "0.45.3",
 		"iteration-trace-contracts": "workspace:*",
+		"iteration-trace-postgres": "workspace:*",
 		"pg": "8.23.0",
 		"react": "19.3.0",
 		"react-dom": "19.3.0",

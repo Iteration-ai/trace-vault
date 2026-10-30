@@ -16,6 +16,7 @@ export {
 	parseTraceEventAcknowledgement,
 	parseTraceEventBatch,
 	parseTracePayload,
+	traceEventSchema,
 	traceReadableText,
 } from "./contracts.ts";
 export type {

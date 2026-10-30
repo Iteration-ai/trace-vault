@@ -168,8 +168,10 @@ try {
 		"--pack-destination",
 		scratch,
 	]);
-	const tarball = (await readdir(scratch)).find((name) =>
-		name.endsWith(".tgz"),
+	const tarball = (await readdir(scratch)).find(
+		(name) =>
+			name.startsWith("useiteration-trace-vault-collector-") &&
+			name.endsWith(".tgz"),
 	);
 	assert.ok(tarball);
 	const install = path.join(scratch, "installed");
@@ -185,6 +187,62 @@ try {
 	const cli = path.join(install, "node_modules", ".bin", "trace-vault");
 	assert.match(
 		(await run(cli, ["--help"], { cwd: scratch })).toString(),
+		/Repository and location capture/,
+	);
+	await run("pnpm", [
+		"--filter",
+		"iteration-cli",
+		"pack",
+		"--pack-destination",
+		scratch,
+	]);
+	const cliManifest = JSON.parse(
+		await readFile(path.join(workspace, "packages/cli/package.json"), "utf8"),
+	);
+	const iterationInstall = path.join(scratch, "iteration-installed");
+	await run("npm", [
+		"install",
+		"--prefix",
+		iterationInstall,
+		"--ignore-scripts",
+		"--no-audit",
+		"--no-fund",
+		path.join(scratch, `iteration-cli-${cliManifest.version}.tgz`),
+	]);
+	const iteration = path.join(
+		iterationInstall,
+		"node_modules",
+		".bin",
+		"iteration",
+	);
+	const iterationVault = path.join(
+		iterationInstall,
+		"node_modules",
+		".bin",
+		"trace-vault",
+	);
+	const iterationHome = path.join(scratch, "iteration-home");
+	await mkdir(iterationHome);
+	const isolatedIteration = {
+		cwd: scratch,
+		env: {
+			...composeEnvironment,
+			HOME: iterationHome,
+			USERPROFILE: iterationHome,
+			NODE_PATH: "",
+			NODE_OPTIONS: "",
+		},
+	};
+	assert.match(
+		(await run(iteration, ["--help"], isolatedIteration)).toString(),
+		/Iteration CLI/,
+	);
+	assert.equal(
+		(await run(iteration, ["version"], isolatedIteration)).toString().trim(),
+		cliManifest.version,
+	);
+	assert.match(
+		(await run(iterationVault, ["--help"], isolatedIteration)).toString(),
 		/Repository and location capture/,
 	);
 	await compose(primary, "up", "--detach", "--wait");
@@ -302,9 +360,9 @@ try {
 			["Approve? Type yes: ", "yes"],
 		],
 	);
-	const collect = () =>
+	const collect = (executable = cli) =>
 		run(
-			cli,
+			executable,
 			[
 				"collect",
 				"claude",
@@ -359,7 +417,7 @@ try {
 		filename,
 		`${JSON.stringify(record(scope, "new ongoing work", "ongoing"))}\n`,
 	);
-	await collect();
+	await collect(iterationVault);
 	const expectedExport = await exportText();
 	assert.match(expectedExport, /new ongoing work/);
 	await collect();
@@ -392,9 +450,15 @@ try {
 	)
 		.toString()
 		.trim();
-	assert.equal(migrationCount, "3");
+	const migrationJournal = JSON.parse(
+		await readFile(
+			path.join(workspace, "packages/vault/migrations/meta/_journal.json"),
+			"utf8",
+		),
+	);
+	assert.equal(migrationCount, String(migrationJournal.entries.length));
 	process.stdout.write(
-		"PASS ongoing collection, idempotent retries, restart + current-version replacement (3 migrations retained)\n",
+		`PASS ongoing collection through iteration-cli's trace-vault entrypoint, idempotent retries through standalone collector, restart + current-version replacement (${migrationCount} vault migrations retained)\n`,
 	);
 
 	const deletedEvents = expectedExport
@@ -502,7 +566,7 @@ try {
 			"-d",
 			"trace_vault",
 			"-Atc",
-			"SELECT count(*) FROM vault.session_tombstones",
+			"SELECT count(*) FROM vault_traces.trace_session_deletions",
 		)
 	)
 		.toString()

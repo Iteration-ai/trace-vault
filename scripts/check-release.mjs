@@ -21,7 +21,7 @@ assert.equal(
 );
 for (const file of [
 	"package.json",
-	"packages/cli/package.json",
+	"packages/vault-collector/package.json",
 	"packages/vault/package.json",
 ]) {
 	const manifest = JSON.parse(await readFile(file, "utf8"));
@@ -32,14 +32,24 @@ for (const file of [
 	);
 }
 const collector = JSON.parse(
-	await readFile("packages/cli/package.json", "utf8"),
+	await readFile("packages/vault-collector/package.json", "utf8"),
 );
 assert.equal(collector.name, "@useiteration/trace-vault-collector");
 assert.deepEqual(collector.bin, { "trace-vault": "./dist/vault-cli.js" });
+assert.equal(Object.keys(collector.dependencies ?? {}).length, 0);
+const cli = JSON.parse(await readFile("packages/cli/package.json", "utf8"));
+assert.equal(cli.name, "iteration-cli");
+assert.match(cli.version, /^\d+\.\d+\.\d+$/);
+assert.deepEqual(cli.bin, {
+	iteration: "./dist/cli.js",
+	"trace-vault": "./dist/vault-cli.js",
+});
 const contracts = JSON.parse(
 	await readFile("packages/trace-contracts/package.json", "utf8"),
 );
-assert.equal(contracts.private, true);
+assert.equal(contracts.name, "iteration-trace-contracts");
+assert.match(contracts.version, /^\d+\.\d+\.\d+$/);
+assert.notEqual(contracts.private, true);
 process.stdout.write(
 	`Release preflight passed for ${tag} at ${taggedCommit}.\n`,
 );

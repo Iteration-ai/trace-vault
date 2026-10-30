@@ -1,0 +1,2402 @@
+{
+  "id": "95981d4b-645e-403c-ba61-00015d6de387",
+  "prevId": "b99bec09-8677-4af5-b50a-e6fe81e4de0f",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "vault.audit_entries": {
+      "name": "audit_entries",
+      "schema": "vault",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "audit_entries_actor_id_members_id_fk": {
+          "name": "audit_entries_actor_id_members_id_fk",
+          "tableFrom": "audit_entries",
+          "tableTo": "members",
+          "schemaTo": "vault",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "vault.auth_sessions": {
+      "name": "auth_sessions",
+      "schema": "vault",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked": {
+          "name": "revoked",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "auth_sessions_member_id_members_id_fk": {
+          "name": "auth_sessions_member_id_members_id_fk",
+          "tableFrom": "auth_sessions",
+          "tableTo": "members",
+          "schemaTo": "vault",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "auth_sessions_token_hash_unique": {
+          "name": "auth_sessions_token_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token_hash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "vault.company": {
+      "name": "company",
+      "schema": "vault",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "default": 1
+        },
+        "deployment_id": {
+          "name": "deployment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "repositories": {
+          "name": "repositories",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "company_deployment_id_unique": {
+          "name": "company_deployment_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "deployment_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "one_company": {
+          "name": "one_company",
+          "value": "\"vault\".\"company\".\"id\" = 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "vault.devices": {
+      "name": "devices",
+      "schema": "vault",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked": {
+          "name": "revoked",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "devices_member_id_members_id_fk": {
+          "name": "devices_member_id_members_id_fk",
+          "tableFrom": "devices",
+          "tableTo": "members",
+          "schemaTo": "vault",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "devices_token_hash_unique": {
+          "name": "devices_token_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token_hash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "device_source": {
+          "name": "device_source",
+          "value": "\"vault\".\"devices\".\"source\" in ('claude', 'codex', 'cursor')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "vault.event_receipts": {
+      "name": "event_receipts",
+      "schema": "vault",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "storage_stream_id": {
+          "name": "storage_stream_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "device_id": {
+          "name": "device_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "capture_authorization": {
+          "name": "capture_authorization",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "policy_revision": {
+          "name": "policy_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "event_receipts_member_id_members_id_fk": {
+          "name": "event_receipts_member_id_members_id_fk",
+          "tableFrom": "event_receipts",
+          "tableTo": "members",
+          "schemaTo": "vault",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "event_receipts_storage_stream_id_storage_streams_id_fk": {
+          "name": "event_receipts_storage_stream_id_storage_streams_id_fk",
+          "tableFrom": "event_receipts",
+          "tableTo": "storage_streams",
+          "schemaTo": "vault",
+          "columnsFrom": [
+            "storage_stream_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "event_receipts_device_id_devices_id_fk": {
+          "name": "event_receipts_device_id_devices_id_fk",
+          "tableFrom": "event_receipts",
+          "tableTo": "devices",
+          "schemaTo": "vault",
+          "columnsFrom": [
+            "device_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "event_receipts_storage_stream_id_event_id_trace_events_device_id_event_id_fk": {
+          "name": "event_receipts_storage_stream_id_event_id_trace_events_device_id_event_id_fk",
+          "tableFrom": "event_receipts",
+          "tableTo": "trace_events",
+          "schemaTo": "vault_traces",
+          "columnsFrom": [
+            "storage_stream_id",
+            "event_id"
+          ],
+          "columnsTo": [
+            "device_id",
+            "event_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "public_event_identity": {
+          "name": "public_event_identity",
+          "nullsNotDistinct": false,
+          "columns": [
+            "member_id",
+            "source",
+            "event_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "vault.event_tombstones": {
+      "name": "event_tombstones",
+      "schema": "vault",
+      "columns": {
+        "member_id": {
+          "name": "member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "event_tombstones_member_id_members_id_fk": {
+          "name": "event_tombstones_member_id_members_id_fk",
+          "tableFrom": "event_tombstones",
+          "tableTo": "members",
+          "schemaTo": "vault",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "event_tombstones_member_id_source_event_id_pk": {
+          "name": "event_tombstones_member_id_source_event_id_pk",
+          "columns": [
+            "member_id",
+            "source",
+            "event_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "vault.invitations": {
+      "name": "invitations",
+      "schema": "vault",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "redeemed_at": {
+          "name": "redeemed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revoked": {
+          "name": "revoked",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "invitations_token_hash_unique": {
+          "name": "invitations_token_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token_hash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "invitation_role": {
+          "name": "invitation_role",
+          "value": "\"vault\".\"invitations\".\"role\" in ('admin', 'member')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "vault.members": {
+      "name": "members",
+      "schema": "vault",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "disabled": {
+          "name": "disabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "accounts": {
+          "name": "accounts",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "locations": {
+          "name": "locations",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "members_email_unique": {
+          "name": "members_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "member_role": {
+          "name": "member_role",
+          "value": "\"vault\".\"members\".\"role\" in ('admin', 'member')"
+        },
+        "normalized_email": {
+          "name": "normalized_email",
+          "value": "\"vault\".\"members\".\"email\" = lower(btrim(\"vault\".\"members\".\"email\"))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "vault.session_identifiers": {
+      "name": "session_identifiers",
+      "schema": "vault",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_session_id": {
+          "name": "source_session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "storage_stream_id": {
+          "name": "storage_stream_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "session_identifiers_member_id_members_id_fk": {
+          "name": "session_identifiers_member_id_members_id_fk",
+          "tableFrom": "session_identifiers",
+          "tableTo": "members",
+          "schemaTo": "vault",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "session_identifiers_storage_stream_id_storage_streams_id_fk": {
+          "name": "session_identifiers_storage_stream_id_storage_streams_id_fk",
+          "tableFrom": "session_identifiers",
+          "tableTo": "storage_streams",
+          "schemaTo": "vault",
+          "columnsFrom": [
+            "storage_stream_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "public_session_identity": {
+          "name": "public_session_identity",
+          "nullsNotDistinct": false,
+          "columns": [
+            "member_id",
+            "source",
+            "source_session_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "vault.source_tenants": {
+      "name": "source_tenants",
+      "schema": "vault",
+      "columns": {
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "source_tenants_id_unique": {
+          "name": "source_tenants_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "vault.storage_streams": {
+      "name": "storage_streams",
+      "schema": "vault",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "storage_streams_organization_id_source_tenants_id_fk": {
+          "name": "storage_streams_organization_id_source_tenants_id_fk",
+          "tableFrom": "storage_streams",
+          "tableTo": "source_tenants",
+          "schemaTo": "vault",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "storage_streams_member_id_members_id_fk": {
+          "name": "storage_streams_member_id_members_id_fk",
+          "tableFrom": "storage_streams",
+          "tableTo": "members",
+          "schemaTo": "vault",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "storage_stream_identity": {
+          "name": "storage_stream_identity",
+          "nullsNotDistinct": false,
+          "columns": [
+            "member_id",
+            "source"
+          ]
+        },
+        "storage_stream_assignment": {
+          "name": "storage_stream_assignment",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "member_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "vault.storage_upgrade": {
+      "name": "storage_upgrade",
+      "schema": "vault",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "default": 1
+        },
+        "last_event_id": {
+          "name": "last_event_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "one_storage_upgrade": {
+          "name": "one_storage_upgrade",
+          "value": "\"vault\".\"storage_upgrade\".\"id\" = 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "vault_traces.trace_events": {
+      "name": "trace_events",
+      "schema": "vault_traces",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "device_id": {
+          "name": "device_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sequence": {
+          "name": "sequence",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "call_id": {
+          "name": "call_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "run": {
+          "name": "run",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "display_text": {
+          "name": "display_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_instruction": {
+          "name": "is_instruction",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "tool_name": {
+          "name": "tool_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "exit_code": {
+          "name": "exit_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "context_window": {
+          "name": "context_window",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_tokens": {
+          "name": "total_tokens",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usage_at": {
+          "name": "usage_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usage_input_tokens": {
+          "name": "usage_input_tokens",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usage_cache_read_tokens": {
+          "name": "usage_cache_read_tokens",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usage_cache_write_tokens": {
+          "name": "usage_cache_write_tokens",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usage_cache_write_long_tokens": {
+          "name": "usage_cache_write_long_tokens",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usage_output_tokens": {
+          "name": "usage_output_tokens",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "billing_kind": {
+          "name": "billing_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "billing_paid_usd": {
+          "name": "billing_paid_usd",
+          "type": "numeric(12, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pull_request_url": {
+          "name": "pull_request_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tool_activity": {
+          "name": "tool_activity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tool_failed": {
+          "name": "tool_failed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usage_activity": {
+          "name": "usage_activity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usage_after_error": {
+          "name": "usage_after_error",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "parent_thread_id": {
+          "name": "parent_thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_run_start": {
+          "name": "is_run_start",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "run_start_ordinal": {
+          "name": "run_start_ordinal",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "agent_path": {
+          "name": "agent_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "agent_nickname": {
+          "name": "agent_nickname",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "launch_cwd": {
+          "name": "launch_cwd",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "launch_branch": {
+          "name": "launch_branch",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "launch_repository_url": {
+          "name": "launch_repository_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "launch_commit_hash": {
+          "name": "launch_commit_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ingested_at": {
+          "name": "ingested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "trace_events_session_order": {
+          "name": "trace_events_session_order",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_events_session_metadata": {
+          "name": "trace_events_session_metadata",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"vault_traces\".\"trace_events\".\"event_type\" = 'session_meta' OR \"vault_traces\".\"trace_events\".\"thread_id\" IS NOT NULL OR \"vault_traces\".\"trace_events\".\"is_run_start\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_events_message_occurred": {
+          "name": "trace_events_message_occurred",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "event_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"vault_traces\".\"trace_events\".\"occurred_at\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_events_message_received": {
+          "name": "trace_events_message_received",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "event_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ingested_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"vault_traces\".\"trace_events\".\"ingested_at\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_events_user_message_order": {
+          "name": "trace_events_user_message_order",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"vault_traces\".\"trace_events\".\"event_type\" = 'user_message'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_events_organization_received": {
+          "name": "trace_events_organization_received",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ingested_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_events_user_session": {
+          "name": "trace_events_user_session",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_events_usage_time": {
+          "name": "trace_events_usage_time",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"vault_traces\".\"trace_events\".\"usage_at\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_events_usage_workspace": {
+          "name": "trace_events_usage_workspace",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "model",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_input_tokens",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_cache_read_tokens",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_cache_write_tokens",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_cache_write_long_tokens",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_output_tokens",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_activity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_after_error",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "billing_kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "billing_paid_usd",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"vault_traces\".\"trace_events\".\"usage_at\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_events_usage_cost": {
+          "name": "trace_events_usage_cost",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "model",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_input_tokens",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_cache_read_tokens",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_cache_write_tokens",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_cache_write_long_tokens",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_output_tokens",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"vault_traces\".\"trace_events\".\"usage_at\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_events_usage_session": {
+          "name": "trace_events_usage_session",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "usage_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"vault_traces\".\"trace_events\".\"usage_at\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_events_turn_context": {
+          "name": "trace_events_turn_context",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "(\"payload\"->>'turn_id')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"vault_traces\".\"trace_events\".\"event_type\" = 'turn_context'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_events_usage_order": {
+          "name": "trace_events_usage_order",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"vault_traces\".\"trace_events\".\"usage_at\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_events_usage_without_model": {
+          "name": "trace_events_usage_without_model",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "(\"payload\"->>'turn_id')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"vault_traces\".\"trace_events\".\"usage_at\" IS NOT NULL AND \"vault_traces\".\"trace_events\".\"model\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_events_pull_request": {
+          "name": "trace_events_pull_request",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"vault_traces\".\"trace_events\".\"pull_request_url\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_events_claude_agent_result": {
+          "name": "trace_events_claude_agent_result",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "(\"payload\"#>>'{record,toolUseResult,agentId}')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"vault_traces\".\"trace_events\".\"event_type\" = 'tool_result' AND (\"vault_traces\".\"trace_events\".\"payload\"#>>'{record,toolUseResult,agentId}') IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "trace_events_organization_id_user_id_device_id_storage_streams_organization_id_member_id_id_fk": {
+          "name": "trace_events_organization_id_user_id_device_id_storage_streams_organization_id_member_id_id_fk",
+          "tableFrom": "trace_events",
+          "tableTo": "storage_streams",
+          "schemaTo": "vault",
+          "columnsFrom": [
+            "organization_id",
+            "user_id",
+            "device_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "member_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "trace_events_pkey": {
+          "name": "trace_events_pkey",
+          "columns": [
+            "device_id",
+            "event_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "trace_events_sequence_nonnegative": {
+          "name": "trace_events_sequence_nonnegative",
+          "value": "\"vault_traces\".\"trace_events\".\"sequence\" >= 0"
+        },
+        "trace_events_event_id_length": {
+          "name": "trace_events_event_id_length",
+          "value": "char_length(\"vault_traces\".\"trace_events\".\"event_id\") BETWEEN 1 AND 200"
+        },
+        "trace_events_session_id_length": {
+          "name": "trace_events_session_id_length",
+          "value": "char_length(\"vault_traces\".\"trace_events\".\"session_id\") BETWEEN 1 AND 200"
+        },
+        "trace_events_call_id_length": {
+          "name": "trace_events_call_id_length",
+          "value": "\"vault_traces\".\"trace_events\".\"call_id\" IS NULL OR char_length(\"vault_traces\".\"trace_events\".\"call_id\") <= 255"
+        },
+        "trace_events_payload_object": {
+          "name": "trace_events_payload_object",
+          "value": "jsonb_typeof(\"vault_traces\".\"trace_events\".\"payload\") = 'object'"
+        },
+        "trace_events_type": {
+          "name": "trace_events_type",
+          "value": "\"vault_traces\".\"trace_events\".\"event_type\" IN ('user_message', 'assistant_message', 'tool_call', 'tool_result', 'session_meta', 'task_started', 'turn_context', 'compacted', 'token_usage_record', 'token_count', 'world_state', 'retained_context', 'security_risk_score', 'reasoning', 'agent_reasoning', 'agent_reasoning_raw_content', 'todo_list', 'compaction', 'context_compaction', 'configuration_update', 'additional_tools', 'task_complete', 'turn_complete', 'thread_goal_updated', 'thread_rolled_back', 'turn_aborted', 'thread_settings_applied', 'source_record')"
+        },
+        "trace_events_tool_activity": {
+          "name": "trace_events_tool_activity",
+          "value": "\"vault_traces\".\"trace_events\".\"tool_activity\" IN ('exploring', 'running', 'editing', 'delegating')"
+        },
+        "trace_events_usage_activity": {
+          "name": "trace_events_usage_activity",
+          "value": "\"vault_traces\".\"trace_events\".\"usage_activity\" IN ('exploring', 'running', 'editing', 'delegating', 'answering')"
+        },
+        "trace_events_billing_kind": {
+          "name": "trace_events_billing_kind",
+          "value": "\"vault_traces\".\"trace_events\".\"billing_kind\" IN ('included', 'paid', 'byok', 'not_charged', 'mixed')"
+        },
+        "trace_events_billing_paid_usd": {
+          "name": "trace_events_billing_paid_usd",
+          "value": "\"vault_traces\".\"trace_events\".\"billing_paid_usd\" IS NULL OR (\"vault_traces\".\"trace_events\".\"billing_paid_usd\" >= 0 AND \"vault_traces\".\"trace_events\".\"billing_kind\" IN ('paid', 'mixed'))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "vault_traces.trace_session_deletions": {
+      "name": "trace_session_deletions",
+      "schema": "vault_traces",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "trace_session_deletions_pkey": {
+          "name": "trace_session_deletions_pkey",
+          "columns": [
+            "organization_id",
+            "user_id",
+            "session_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "trace_session_deletions_session_id_length": {
+          "name": "trace_session_deletions_session_id_length",
+          "value": "char_length(\"vault_traces\".\"trace_session_deletions\".\"session_id\") BETWEEN 1 AND 200"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "vault_traces.trace_sessions": {
+      "name": "trace_sessions",
+      "schema": "vault_traces",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "device_id": {
+          "name": "device_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_count": {
+          "name": "event_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "parent_thread_id": {
+          "name": "parent_thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "codex_billing_status": {
+          "name": "codex_billing_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "codex_billing_source": {
+          "name": "codex_billing_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "codex_billing_credits": {
+          "name": "codex_billing_credits",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "codex_billing_account": {
+          "name": "codex_billing_account",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "codex_billing_checked_at": {
+          "name": "codex_billing_checked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "own_start_sequence": {
+          "name": "own_start_sequence",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "own_event_count": {
+          "name": "own_event_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "agent_path": {
+          "name": "agent_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "agent_nickname": {
+          "name": "agent_nickname",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "agent_description": {
+          "name": "agent_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_message_preview": {
+          "name": "user_message_preview",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_title": {
+          "name": "source_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_cwd": {
+          "name": "source_cwd",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_repository_url": {
+          "name": "source_repository_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "first_user_message_preview": {
+          "name": "first_user_message_preview",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "launch_cwd": {
+          "name": "launch_cwd",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "launch_branch": {
+          "name": "launch_branch",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "launch_repository_url": {
+          "name": "launch_repository_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "launch_commit_hash": {
+          "name": "launch_commit_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "first_occurred_at": {
+          "name": "first_occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_occurred_at": {
+          "name": "last_occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "first_received_at": {
+          "name": "first_received_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_received_at": {
+          "name": "last_received_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "trace_sessions_occurred_time": {
+          "name": "trace_sessions_occurred_time",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"vault_traces\".\"trace_sessions\".\"last_occurred_at\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_sessions_recent": {
+          "name": "trace_sessions_recent",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_received_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_sessions_user_recent": {
+          "name": "trace_sessions_user_recent",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_received_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_sessions_first_received": {
+          "name": "trace_sessions_first_received",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "first_received_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_sessions_user_session": {
+          "name": "trace_sessions_user_session",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_sessions_thread": {
+          "name": "trace_sessions_thread",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "thread_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trace_sessions_parent_thread": {
+          "name": "trace_sessions_parent_thread",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "parent_thread_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "trace_sessions_organization_id_user_id_device_id_storage_streams_organization_id_member_id_id_fk": {
+          "name": "trace_sessions_organization_id_user_id_device_id_storage_streams_organization_id_member_id_id_fk",
+          "tableFrom": "trace_sessions",
+          "tableTo": "storage_streams",
+          "schemaTo": "vault",
+          "columnsFrom": [
+            "organization_id",
+            "user_id",
+            "device_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "member_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "trace_sessions_pkey": {
+          "name": "trace_sessions_pkey",
+          "columns": [
+            "organization_id",
+            "device_id",
+            "session_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "trace_sessions_event_count_positive": {
+          "name": "trace_sessions_event_count_positive",
+          "value": "\"vault_traces\".\"trace_sessions\".\"event_count\" > 0"
+        },
+        "trace_sessions_codex_billing_status": {
+          "name": "trace_sessions_codex_billing_status",
+          "value": "\"vault_traces\".\"trace_sessions\".\"codex_billing_status\" IN ('available', 'partial', 'unavailable')"
+        },
+        "trace_sessions_codex_billing_credits": {
+          "name": "trace_sessions_codex_billing_credits",
+          "value": "\"vault_traces\".\"trace_sessions\".\"codex_billing_credits\" IS NULL OR \"vault_traces\".\"trace_sessions\".\"codex_billing_status\" = 'available'"
+        },
+        "trace_sessions_session_id_length": {
+          "name": "trace_sessions_session_id_length",
+          "value": "char_length(\"vault_traces\".\"trace_sessions\".\"session_id\") BETWEEN 1 AND 200"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {
+    "vault_traces": "vault_traces",
+    "vault": "vault"
+  },
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

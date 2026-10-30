@@ -252,7 +252,7 @@ export async function assertFreshCollectorDirectory(
 		});
 	if (configExists) {
 		throw new Error(
-			`This collector data directory is already configured. Run trace-vault status ${source} with the same --vault and --data-directory, or choose a different --data-directory for another vault.`,
+			`This collector data directory is already configured for ${source}. Use your collector's status command with the same connection and --data-directory, or choose a different --data-directory for another workspace or vault.`,
 		);
 	}
 	if (state.initialized || (await outboxSize(paths)) > 0) {

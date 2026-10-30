@@ -1,6 +1,6 @@
 {
-	"name": "@useiteration/trace-vault-collector",
-	"version": "0.1.0",
+	"name": "iteration-cli",
+	"version": "0.14.4",
 	"type": "module",
 	"license": "Apache-2.0",
 	"repository": {
@@ -17,13 +17,14 @@
 		"NOTICE"
 	],
 	"bin": {
+		"iteration": "./dist/cli.js",
 		"trace-vault": "./dist/vault-cli.js"
 	},
 	"publishConfig": {
 		"access": "public"
 	},
 	"scripts": {
-		"build": "tsc -p tsconfig.json --noEmit && node build.mjs"
+		"build": "pnpm --filter iteration-trace-contracts build && tsc -p tsconfig.json --noEmit && node build.mjs"
 	},
 	"devDependencies": {
 		"@secretlint/core": "13.0.6",

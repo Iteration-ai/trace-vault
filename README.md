@@ -42,3 +42,12 @@ bootstrap token, then [connect a collector](docs/setup.md#build-the-collector).
 [Full setup & capture limitations](docs/setup.md) · [Backups & recovery](docs/operations.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 Built by [Iteration](https://github.com/Iteration-ai). [Apache-2.0](LICENSE).
+
+## One canonical trace stack
+
+This repository also owns the complete Apache-2.0 [Iteration CLI](packages/cli/README.md)
+and shared `iteration-trace-contracts`. The [standalone vault collector](packages/vault-collector/README.md)
+builds directly from the same CLI modules, exposes only `trace-vault`, and needs
+no Iteration account. Iteration consumes this source at a pinned revision and
+publishes its CLI/contracts separately; this repository's release publishes only
+the standalone collector, server image and GitHub release.

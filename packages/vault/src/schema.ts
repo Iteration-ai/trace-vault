@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
 	boolean,
 	check,
+	foreignKey,
 	integer,
 	jsonb,
 	pgSchema,
@@ -11,10 +12,15 @@ import {
 	unique,
 	uuid,
 } from "drizzle-orm/pg-core";
-import type {
-	TraceEvent,
-	VaultCaptureAuthorization,
-} from "iteration-trace-contracts";
+import type { VaultCaptureAuthorization } from "iteration-trace-contracts";
+import {
+	traceEventColumns,
+	traceEventConstraints,
+	traceSessionColumns,
+	traceSessionConstraints,
+	traceSessionDeletionColumns,
+	traceSessionDeletionConstraints,
+} from "iteration-trace-postgres";
 import type {
 	VaultAccount,
 	VaultRole,
@@ -104,8 +110,68 @@ export const devices = vaultSchema.table(
 	],
 );
 
-export const traceSessions = vaultSchema.table(
+export const sourceTenants = vaultSchema.table("source_tenants", {
+	source: source().primaryKey(),
+	id: uuid("id").notNull().defaultRandom().unique(),
+});
+
+export const storageStreams = vaultSchema.table(
+	"storage_streams",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		organizationId: uuid("organization_id")
+			.notNull()
+			.references(() => sourceTenants.id),
+		memberId: uuid("member_id")
+			.notNull()
+			.references(() => members.id),
+		source: source(),
+	},
+	(t) => [
+		unique("storage_stream_identity").on(t.memberId, t.source),
+		unique("storage_stream_assignment").on(t.organizationId, t.memberId, t.id),
+	],
+);
+
+export const traceStorageSchema = pgSchema("vault_traces");
+export const traceEvents = traceStorageSchema.table(
+	"trace_events",
+	traceEventColumns(),
+	(t) => [
+		...traceEventConstraints(t, { concurrently: false }),
+		foreignKey({
+			columns: [t.organizationId, t.userId, t.deviceId],
+			foreignColumns: [
+				storageStreams.organizationId,
+				storageStreams.memberId,
+				storageStreams.id,
+			],
+		}),
+	],
+);
+export const traceSessions = traceStorageSchema.table(
 	"trace_sessions",
+	traceSessionColumns(),
+	(t) => [
+		...traceSessionConstraints(t, { concurrently: false }),
+		foreignKey({
+			columns: [t.organizationId, t.userId, t.deviceId],
+			foreignColumns: [
+				storageStreams.organizationId,
+				storageStreams.memberId,
+				storageStreams.id,
+			],
+		}),
+	],
+);
+export const traceSessionDeletions = traceStorageSchema.table(
+	"trace_session_deletions",
+	traceSessionDeletionColumns(),
+	traceSessionDeletionConstraints,
+);
+
+export const sessionIdentifiers = vaultSchema.table(
+	"session_identifiers",
 	{
 		id: uuid("id").primaryKey().defaultRandom(),
 		memberId: uuid("member_id")
@@ -113,24 +179,15 @@ export const traceSessions = vaultSchema.table(
 			.references(() => members.id),
 		source: source(),
 		sourceSessionId: text("source_session_id").notNull(),
-		projectId: text("project_id"),
-		cwd: text("cwd"),
-		title: text("title"),
-		firstUserMessage: text("first_user_message"),
-		firstUserMessageSequence: integer("first_user_message_sequence"),
-		firstUserMessageEventId: text("first_user_message_event_id"),
-		repository: text("repository"),
-		eventCount: integer("event_count").notNull().default(0),
-		lastReceivedAt: timestamp("last_received_at", {
-			withTimezone: true,
-			precision: 3,
-		})
+		storageStreamId: uuid("storage_stream_id")
 			.notNull()
-			.defaultNow(),
+			.references(() => storageStreams.id),
+		projectId: text("project_id"),
+		title: text("title"),
 		createdAt: createdAt(),
 	},
 	(t) => [
-		unique("trace_session_identity").on(
+		unique("public_session_identity").on(
 			t.memberId,
 			t.source,
 			t.sourceSessionId,
@@ -138,8 +195,8 @@ export const traceSessions = vaultSchema.table(
 	],
 );
 
-export const traceEvents = vaultSchema.table(
-	"trace_events",
+export const eventReceipts = vaultSchema.table(
+	"event_receipts",
 	{
 		id: uuid("id").primaryKey().defaultRandom(),
 		memberId: uuid("member_id")
@@ -147,33 +204,27 @@ export const traceEvents = vaultSchema.table(
 			.references(() => members.id),
 		source: source(),
 		eventId: text("event_id").notNull(),
-		sourceSessionId: text("source_session_id").notNull(),
-		sequence: integer("sequence").notNull(),
+		storageStreamId: uuid("storage_stream_id")
+			.notNull()
+			.references(() => storageStreams.id),
+		projectId: text("project_id"),
 		occurredAt: text("occurred_at"),
 		deviceId: uuid("device_id")
 			.notNull()
 			.references(() => devices.id),
-		payload: jsonb("payload").$type<TraceEvent>().notNull(),
 		captureAuthorization: jsonb("capture_authorization")
 			.$type<VaultCaptureAuthorization>()
 			.notNull(),
 		policyRevision: integer("policy_revision").notNull(),
 		createdAt: createdAt(),
 	},
-	(t) => [unique("trace_event_identity").on(t.memberId, t.source, t.eventId)],
-);
-
-export const sessionTombstones = vaultSchema.table(
-	"session_tombstones",
-	{
-		memberId: uuid("member_id")
-			.notNull()
-			.references(() => members.id),
-		source: source(),
-		sourceSessionId: text("source_session_id").notNull(),
-		createdAt: createdAt(),
-	},
-	(t) => [primaryKey({ columns: [t.memberId, t.source, t.sourceSessionId] })],
+	(t) => [
+		unique("public_event_identity").on(t.memberId, t.source, t.eventId),
+		foreignKey({
+			columns: [t.storageStreamId, t.eventId],
+			foreignColumns: [traceEvents.deviceId, traceEvents.eventId],
+		}).onDelete("cascade"),
+	],
 );
 
 export const eventTombstones = vaultSchema.table(
@@ -187,6 +238,16 @@ export const eventTombstones = vaultSchema.table(
 		createdAt: createdAt(),
 	},
 	(t) => [primaryKey({ columns: [t.memberId, t.source, t.eventId] })],
+);
+
+export const storageUpgrade = vaultSchema.table(
+	"storage_upgrade",
+	{
+		id: integer("id").primaryKey().default(1),
+		lastEventId: uuid("last_event_id"),
+		completedAt: timestamp("completed_at", { withTimezone: true }),
+	},
+	(t) => [check("one_storage_upgrade", sql`${t.id} = 1`)],
 );
 
 export const auditEntries = vaultSchema.table("audit_entries", {

@@ -78,9 +78,11 @@ Back up and rehearse the target release on a restored copy first. Read its
 migration/rollback notes; do not assume an old binary can use a migrated schema.
 Never remove the PostgreSQL volume to upgrade.
 
-For a source-built release, check out the reviewed version, retain `.env` and run:
+For a source-built release, stop the old server, check out the reviewed version,
+retain `.env` and run:
 
 ```sh
+docker compose --env-file .env stop vault
 docker compose --env-file .env build vault
 docker compose --env-file .env up --detach --wait --no-build --force-recreate vault
 ```
@@ -95,10 +97,36 @@ Migration `0002_session_message_preview` scans retained user messages to backfil
 missing session names. Allow a maintenance window for large archives: it runs
 atomically before startup and leaves original source titles and events intact.
 
-There is no previously released vault version for the initial release. The
-shipping rehearsal proves fresh installation, migration idempotency, restart and
-same-version container replacement—not cross-version upgrade compatibility.
-Each future release must rehearse its predecessor's populated database.
+### Upgrading a 0.1.0 archive to the shared engine
+
+Release 0.1.1 replaces the original vault storage with the same PostgreSQL engine
+used by Iteration. **Stop every old vault process and take a backup first.** Do
+not run old and new servers against the same database. Keep enough free disk for
+the original archive and its replacement during conversion.
+
+Startup renames the former tables, installs the canonical projection functions,
+then replays the archive in committed batches of 50 events. Progress is recorded
+with each batch; restart the same version after an interruption to resume. The
+server does not accept traffic until conversion and verification finish.
+
+Public session/event UUIDs, original envelopes, capture proofs, enrolled-device
+attribution, receipt timestamps and source-scoped deletions are preserved.
+Native member permissions and capture rules do not change. Legacy textual
+project IDs remain in export/presentation metadata rather than being cast to
+UUIDs. Counts and reconstructed envelopes are checked before the former raw
+tables are removed; there is no second live trace store or dual writing.
+
+Streaming usage now accepts improved reports under an existing event ID without
+inflating event counts. Ordinary retries remain first-write-wins. Session names,
+source metadata and user-message fallbacks are projected by the shared engine.
+
+**Rollback requires restoring the pre-upgrade backup into a fresh database and
+running 0.1.0 against that restored database.** Never start 0.1.0 against an
+upgraded or partially upgraded database. Rehearse this upgrade on an isolated
+restored copy before touching the live archive. The database suite exercises a
+populated former schema, forced interruption, resume, unchanged public exports,
+stable public links and retained tombstones; the container rehearsal separately
+covers fresh installation, replacement and backup/restore.
 
 ## Recover an existing administrator
 
@@ -139,9 +167,11 @@ node scripts/rehearse.mjs
 ```
 
 If Docker requires sudo, use `VAULT_REHEARSAL_SUDO=1 node scripts/rehearse.mjs`.
-This builds the shipping image, installs a packed collector outside the source
-workspace, performs private interactive enrollment, imports synthetic native
-records and compares exports across replacement and a separate backup restore.
+This builds the shipping image, installs both packed collector packages outside
+the source workspace, smokes `iteration` and both `trace-vault` executables,
+performs private interactive enrollment, imports synthetic history through the
+standalone collector and ongoing records through `iteration-cli`'s vault
+entrypoint, and compares exports across replacement and a separate backup restore.
 It also checks scope exclusion/redaction, read isolation, restored tombstones and
 operator recovery. It uses random project names/ports and synthetic data only,
 and removes its own containers, volumes and temporary files afterward. Failures
