@@ -7,14 +7,14 @@ const { version } = JSON.parse(
 );
 await mkdir("artifacts", { recursive: true });
 const tarball = path.resolve(
-	`artifacts/iteration-ai-trace-vault-collector-${version}.tgz`,
+	`artifacts/useiteration-trace-vault-collector-${version}.tgz`,
 );
 await rm(tarball, { force: true });
 execFileSync(
 	"pnpm",
 	[
 		"--filter",
-		"@iteration-ai/trace-vault-collector",
+		"@useiteration/trace-vault-collector",
 		"pack",
 		"--pack-destination",
 		path.resolve("artifacts"),

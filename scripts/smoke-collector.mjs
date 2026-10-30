@@ -8,7 +8,7 @@ const { name, version } = JSON.parse(
 	await readFile("packages/cli/package.json", "utf8"),
 );
 const tarball = path.resolve(
-	`artifacts/iteration-ai-trace-vault-collector-${version}.tgz`,
+	`artifacts/useiteration-trace-vault-collector-${version}.tgz`,
 );
 const directory = await mkdtemp(path.join(os.tmpdir(), "trace-vault-pack-"));
 try {
@@ -30,7 +30,7 @@ try {
 	const manifest = JSON.parse(
 		await readFile(path.join(root, "package.json"), "utf8"),
 	);
-	assert.equal(manifest.name, "@iteration-ai/trace-vault-collector");
+	assert.equal(manifest.name, "@useiteration/trace-vault-collector");
 	assert.deepEqual(manifest.bin, { "trace-vault": "./dist/vault-cli.js" });
 	for (const field of [
 		"dependencies",

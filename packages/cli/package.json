@@ -1,5 +1,5 @@
 {
-	"name": "@iteration-ai/trace-vault-collector",
+	"name": "@useiteration/trace-vault-collector",
 	"version": "0.1.0",
 	"type": "module",
 	"license": "Apache-2.0",

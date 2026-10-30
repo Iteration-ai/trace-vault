@@ -34,7 +34,7 @@ for (const file of [
 const collector = JSON.parse(
 	await readFile("packages/cli/package.json", "utf8"),
 );
-assert.equal(collector.name, "@iteration-ai/trace-vault-collector");
+assert.equal(collector.name, "@useiteration/trace-vault-collector");
 assert.deepEqual(collector.bin, { "trace-vault": "./dist/vault-cli.js" });
 const contracts = JSON.parse(
 	await readFile("packages/trace-contracts/package.json", "utf8"),

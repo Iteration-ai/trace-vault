@@ -51,7 +51,7 @@ pnpm build
 pnpm typecheck
 pnpm pack:collector
 pnpm smoke:collector
-npm install --global ./artifacts/iteration-ai-trace-vault-collector-0.1.0.tgz --ignore-scripts
+npm install --global ./artifacts/useiteration-trace-vault-collector-0.1.0.tgz --ignore-scripts
 trace-vault --help
 ```
 
@@ -120,7 +120,7 @@ not a claim of compatibility with a previously released vault schema.
 
 ## Releases (automatic on version tags)
 
-The intended package is `@iteration-ai/trace-vault-collector@0.1.0`; the intended image
+The intended package is `@useiteration/trace-vault-collector@0.1.0`; the intended image
 is `ghcr.io/iteration-ai/trace-vault:v0.1.0` (Linux amd64). Neither exists by virtue of
 adding these workflows. `VAULT_IMAGE` selects a release image; the default is
 `trace-vault:local`. After a verified release, use `VAULT_IMAGE` with Compose
@@ -128,11 +128,11 @@ adding these workflows. `VAULT_IMAGE` selects a release image; the default is
 
 ### One-time npm setup
 
-1. Sign in to npm with an account that can publish under the `@iteration-ai` scope.
+1. Sign in to npm with an account that can publish under the `@useiteration` scope.
    GitHub organization ownership does not grant npm scope ownership.
 2. In npm, open **Access Tokens → Generate New Token**. Name it `trace-vault-release`.
    Under **Packages and scopes**, choose **Read and write (publish and stage)**,
-   then **Only select packages and scopes** and select the `@iteration-ai` scope.
+   then **Only select packages and scopes** and select the `@useiteration` scope.
    Enable **Bypass two-factor authentication** for unattended publishing. Leave
    organization-management access disabled. Choose an expiry and rotate the token
    before it expires. See [npm's token guide](https://docs.npmjs.com/creating-and-viewing-access-tokens).

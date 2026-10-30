@@ -41,7 +41,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "::error::Add the repository Actions secret NPM_TOKEN with publish access to the @iteration-ai scope."
+            echo "::error::Add the repository Actions secret NPM_TOKEN with publish access to the @useiteration scope."
             exit 1
           fi
           npm whoami --registry=https://registry.npmjs.org > /dev/null
@@ -88,7 +88,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="$(node -p 'require("./packages/cli/package.json").version')"
-          npm publish "artifacts/iteration-ai-trace-vault-collector-${VERSION}.tgz" --access public --provenance
+          npm publish "artifacts/useiteration-trace-vault-collector-${VERSION}.tgz" --access public --provenance
       - name: Publish the tested server image using GITHUB_TOKEN
         env:
           GH_TOKEN: ${{ github.token }}
@@ -105,4 +105,4 @@ jobs:
         run: |
           gh release create "$RELEASE_TAG" --verify-tag --target "$GITHUB_SHA" \
             --title "Trace Vault $RELEASE_TAG" --generate-notes \
-            artifacts/iteration-ai-trace-vault-collector-*.tgz artifacts/SHA256SUMS artifacts/image-id.txt
+            artifacts/useiteration-trace-vault-collector-*.tgz artifacts/SHA256SUMS artifacts/image-id.txt

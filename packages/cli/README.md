@@ -1,6 +1,6 @@
 # Trace Vault collector
 
-`@iteration-ai/trace-vault-collector` is the independent Apache-2.0 collector for a
+`@useiteration/trace-vault-collector` is the independent Apache-2.0 collector for a
 self-hosted Trace Vault. It requires Node.js 22 or later and installs only the
 `trace-vault` executable. The bundled collector has no runtime npm dependencies;
 no Iteration account or separately published contracts package is needed.
@@ -12,7 +12,7 @@ release, build and pack from the standalone repository:
 pnpm install --frozen-lockfile
 pnpm build
 pnpm pack:collector
-npm install --global ./artifacts/iteration-ai-trace-vault-collector-0.1.0.tgz --ignore-scripts
+npm install --global ./artifacts/useiteration-trace-vault-collector-0.1.0.tgz --ignore-scripts
 trace-vault --help
 trace-vault connect claude --vault https://vault.example.com
 trace-vault collect claude --vault https://vault.example.com
