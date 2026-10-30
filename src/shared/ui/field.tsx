@@ -6,8 +6,7 @@ import type {
 } from "react";
 import { Icon, type IconName } from "./icon";
 
-const fieldSizes = ["md", "lg"] as const;
-export type FieldSize = (typeof fieldSizes)[number];
+export type FieldSize = keyof typeof controlSizeClasses;
 
 const controlBaseClass =
 	"block w-full min-w-0 rounded-md border border-line-strong bg-surface text-fg transition-colors placeholder:text-fg-3 hover:border-fg-4 focus:border-accent focus:ring-2 focus:ring-accent/25 focus:outline-none disabled:opacity-50";
@@ -15,7 +14,7 @@ const controlBaseClass =
 const controlSizeClasses = {
 	md: "h-8 px-2.5 text-sm",
 	lg: "h-11 px-3.5 text-md",
-} as const satisfies Record<FieldSize, string>;
+} as const;
 
 export const fieldLabelClass = "grid gap-1.5 text-xs font-medium text-fg-2";
 

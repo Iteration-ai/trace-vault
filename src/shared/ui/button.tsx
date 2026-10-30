@@ -1,10 +1,7 @@
 import type { ButtonHTMLAttributes } from "react";
 
-const buttonVariants = ["primary", "secondary", "ghost", "danger"] as const;
-export type ButtonVariant = (typeof buttonVariants)[number];
-
-const buttonSizes = ["sm", "md", "lg", "icon"] as const;
-export type ButtonSize = (typeof buttonSizes)[number];
+export type ButtonVariant = keyof typeof buttonVariantClasses;
+export type ButtonSize = keyof typeof buttonSizeClasses;
 
 const buttonBaseClass =
 	"inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap no-underline transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50";
@@ -15,14 +12,14 @@ const buttonVariantClasses = {
 		"border border-line-strong bg-raised text-fg shadow-sm hover:border-fg-4 hover:bg-overlay",
 	ghost: "text-fg-2 hover:bg-hover hover:text-fg",
 	danger: "border border-err/35 text-err hover:bg-err/10",
-} as const satisfies Record<ButtonVariant, string>;
+} as const;
 
 const buttonSizeClasses = {
 	sm: "h-7 px-2.5 text-sm",
 	md: "h-8 px-3 text-sm",
 	lg: "h-10 px-4 text-base",
 	icon: "size-8 text-sm",
-} as const satisfies Record<ButtonSize, string>;
+} as const;
 
 export function buttonClasses(
 	variant: ButtonVariant,
