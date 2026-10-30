@@ -91,6 +91,10 @@ and use the same `up` command. Startup applies pending migrations before serving
 Check `/ready`, sign-in, a known export and collector acknowledgements afterward.
 `docker compose down` preserves data; `down --volumes` destroys it.
 
+Migration `0002_session_message_preview` scans retained user messages to backfill
+missing session names. Allow a maintenance window for large archives: it runs
+atomically before startup and leaves original source titles and events intact.
+
 There is no previously released vault version for the initial release. The
 shipping rehearsal proves fresh installation, migration idempotency, restart and
 same-version container replacement—not cross-version upgrade compatibility.

@@ -19,6 +19,10 @@ workstream and is not implemented here.
 - Streaming NDJSON export, paginated sessions/events/members/devices/audit, device
   revocation, disabled-member retention, and deletion tombstones preventing reupload.
 
+Session names prefer a captured title. Otherwise they use the first nonempty
+user message, with whitespace collapsed and a 160-character limit. Sessions with
+neither show “Untitled session”; original event payloads are unchanged.
+
 The collector runs on the machine containing the original Claude Code, Codex or
 Cursor files. Originals that do not match an approved rule stay there; they are
 not uploaded into a second mandatory personal vault. Approving a directory or

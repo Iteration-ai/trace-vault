@@ -62,7 +62,9 @@ const sessionFields = {
 	memberId: tables.traceSessions.memberId,
 	contributorId: tables.traceSessions.memberId,
 	contributorName: tables.members.name,
-	title: tables.traceSessions.title,
+	title: sql<
+		string | null
+	>`coalesce(nullif(btrim(${tables.traceSessions.title}), ''), ${tables.traceSessions.firstUserMessage})`,
 	cwd: tables.traceSessions.cwd,
 	projectId: tables.traceSessions.projectId,
 	repository: tables.traceSessions.repository,
@@ -82,6 +84,31 @@ const sessionMetadataSchema = z.object({
 	git: z.object({ repository_url: z.string().nullish() }).nullish(),
 });
 const duplicateErrorSchema = z.object({ code: z.literal("23505") });
+function userMessagePreview(payload: TraceEvent["payload"]): string | null {
+	const { text, message, content } = payload;
+	const value =
+		typeof text === "string" && text.trim()
+			? text
+			: typeof message === "string" && message.trim()
+				? message
+				: Array.isArray(content)
+					? content
+							.flatMap((block) =>
+								block !== null &&
+								typeof block === "object" &&
+								!Array.isArray(block) &&
+								(block.type === "text" || block.type === "input_text") &&
+								typeof block.text === "string"
+									? [block.text]
+									: [],
+							)
+							.join(" ")
+					: "";
+	const preview = [...value.replace(/\s+/gu, " ").trim()]
+		.slice(0, 160)
+		.join("");
+	return preview || null;
+}
 function projectSession(
 	event: TraceEvent,
 	identity: { memberId: string; source: VaultSource },
@@ -93,12 +120,32 @@ function projectSession(
 	if (!metadata.success)
 		fail("invalid_input", "Invalid session metadata fields");
 	const remote = metadata.data.git?.repository_url;
+	const preview =
+		event.eventType === "user_message"
+			? userMessagePreview(event.payload)
+			: null;
+	const earlier =
+		preview !== null &&
+		(previous?.firstUserMessageSequence == null ||
+			event.sequence < previous.firstUserMessageSequence ||
+			(event.sequence === previous.firstUserMessageSequence &&
+				Buffer.compare(
+					Buffer.from(event.eventId),
+					Buffer.from(previous.firstUserMessageEventId!),
+				) < 0));
 	return {
 		...identity,
 		sourceSessionId: event.sessionId,
 		projectId: event.projectId ?? previous?.projectId ?? null,
 		cwd: metadata.data.cwd ?? previous?.cwd ?? null,
-		title: metadata.data.title ?? previous?.title ?? null,
+		title: metadata.data.title?.trim() || previous?.title || null,
+		firstUserMessage: earlier ? preview : (previous?.firstUserMessage ?? null),
+		firstUserMessageSequence: earlier
+			? event.sequence
+			: (previous?.firstUserMessageSequence ?? null),
+		firstUserMessageEventId: earlier
+			? event.eventId
+			: (previous?.firstUserMessageEventId ?? null),
 		repository: remote
 			? canonicalRepository(remote)
 			: (previous?.repository ?? null),
@@ -845,6 +892,11 @@ export class VaultStore {
 				);
 			}
 			if (sessionRows.size) {
+				const earlierUserMessage = sql`excluded.first_user_message_sequence is not null and (
+					${tables.traceSessions.firstUserMessageSequence} is null or
+					(excluded.first_user_message_sequence, excluded.first_user_message_event_id collate "C") <
+					(${tables.traceSessions.firstUserMessageSequence}, ${tables.traceSessions.firstUserMessageEventId} collate "C")
+				)`;
 				await tx
 					.insert(tables.traceSessions)
 					.values([...sessionRows.values()])
@@ -858,6 +910,9 @@ export class VaultStore {
 							projectId: sql`coalesce(excluded.project_id, ${tables.traceSessions.projectId})`,
 							cwd: sql`coalesce(excluded.cwd, ${tables.traceSessions.cwd})`,
 							title: sql`coalesce(excluded.title, ${tables.traceSessions.title})`,
+							firstUserMessage: sql`case when ${earlierUserMessage} then excluded.first_user_message else ${tables.traceSessions.firstUserMessage} end`,
+							firstUserMessageSequence: sql`case when ${earlierUserMessage} then excluded.first_user_message_sequence else ${tables.traceSessions.firstUserMessageSequence} end`,
+							firstUserMessageEventId: sql`case when ${earlierUserMessage} then excluded.first_user_message_event_id else ${tables.traceSessions.firstUserMessageEventId} end`,
 							repository: sql`coalesce(excluded.repository, ${tables.traceSessions.repository})`,
 							eventCount: sql`${tables.traceSessions.eventCount} + excluded.event_count`,
 							lastReceivedAt: sql`excluded.last_received_at`,

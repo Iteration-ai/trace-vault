@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, type TestContext } from "node:test";
 import type { TraceEvent } from "iteration-trace-contracts";
@@ -21,8 +24,15 @@ const caller = (
 ): VaultCaller => ({ kind, tokenHash: tokenHash(value) });
 const errorCode = (code: string) => (error: unknown) =>
 	error instanceof VaultStoreError && error.code === code;
+const migrationsDirectory = fileURLToPath(
+	new URL("../migrations", import.meta.url),
+);
 
-async function fixture(context: TestContext, raceBootstrap = false) {
+async function fixture(
+	context: TestContext,
+	raceBootstrap = false,
+	migrations = migrationsDirectory,
+) {
 	assert.ok(
 		databaseUrl,
 		"Set VAULT_TEST_DATABASE_URL to an explicit disposable local PostgreSQL URL",
@@ -44,12 +54,9 @@ async function fixture(context: TestContext, raceBootstrap = false) {
 		await admin.query(`DROP DATABASE "${database}"`);
 		await admin.end();
 	});
-	const migrationsDirectory = fileURLToPath(
-		new URL("../migrations", import.meta.url),
-	);
 	await Promise.all(
 		Array.from({ length: raceBootstrap ? 2 : 1 }, () =>
-			migrateVault(url.toString(), migrationsDirectory),
+			migrateVault(url.toString(), migrations),
 		),
 	);
 	await store.ready();
@@ -116,6 +123,7 @@ async function fixture(context: TestContext, raceBootstrap = false) {
 	return {
 		store,
 		pool,
+		databaseUrl: url.toString(),
 		initial,
 		member,
 		invite,
@@ -322,6 +330,285 @@ test("vault ingestion preserves full payload, deduplicates across enrollments, a
 	await assert.rejects(
 		store.readEvents(deviceCaller, null),
 		errorCode("forbidden"),
+	);
+});
+
+test("session titles fall back to the first nonempty user message, never assistant text or internal IDs", {
+	skip: !databaseUrl,
+}, async (context) => {
+	const { store, policy, member, memberCaller, deviceCaller } =
+		await fixture(context);
+	for (const source of ["claude", "cursor", "codex"] as const) {
+		if (source !== "claude")
+			await store.enrollDevice(memberCaller, {
+				source,
+				name: source,
+				tokenHash: tokenHash(source),
+			});
+		const device =
+			source === "claude" ? deviceCaller : caller(source, "device");
+		const identity = {
+			memberId: member.id,
+			source,
+			sourceSessionId: "shared-source-id",
+		};
+		const message = (
+			id: string,
+			sequence: number,
+			payload: TraceEvent["payload"],
+		): TraceEvent => ({
+			...event(id, policy.revision, identity.sourceSessionId),
+			eventType: "user_message",
+			sequence,
+			payload,
+		});
+		const first = message(
+			"z-first",
+			10,
+			source === "codex"
+				? {
+						content: [
+							{ type: "input_image", image_url: "not title text" },
+							{ type: "input_text", text: ` Investigate\n ${source}` },
+							{ type: "input_text", text: "retries " },
+						],
+					}
+				: { text: ` Investigate\n ${source} retries ` },
+		);
+		const original = [
+			message("later", 30, { message: "Later request" }),
+			{
+				...message("assistant", 0, { text: "Do not use assistant text" }),
+				eventType: "assistant_message" as const,
+			},
+			message("blank", 1, { text: " \n\t\u00a0\ufeff " }),
+			first,
+		];
+		await store.ingest(device, policy.revision, original);
+		const detail = await store.getSession(memberCaller, identity);
+		assert.equal(detail.title, `Investigate ${source} retries`);
+		assert.equal(
+			(await store.getSessionById(memberCaller, detail.id)).title,
+			detail.title,
+		);
+		assert.equal(
+			(await store.listSessions(memberCaller)).items.find(
+				(row) => row.id === detail.id,
+			)?.title,
+			detail.title,
+		);
+		assert.deepEqual(
+			(await store.readEvents(memberCaller, identity)).items.find(
+				(row) => row.eventId === "z-first",
+			)?.payload,
+			first,
+		);
+		await store.ingest(device, policy.revision, [
+			message("a-first", 10, { message: `Earlier ${source} tie` }),
+		]);
+		assert.equal(
+			(await store.getSession(memberCaller, identity)).title,
+			`Earlier ${source} tie`,
+		);
+		await store.ingest(device, policy.revision, [
+			message("earliest", 5, { text: `First ${source} prompt` }),
+		]);
+		assert.equal(
+			(await store.getSession(memberCaller, identity)).title,
+			`First ${source} prompt`,
+		);
+		await store.ingest(device, policy.revision, original);
+		assert.equal(
+			(await store.getSession(memberCaller, identity)).title,
+			`First ${source} prompt`,
+		);
+		await store.ingest(device, policy.revision, [
+			message("\uE000", 4, { text: `Stable ${source} tie` }),
+			message("😀", 4, { text: "Not the first ID in database order" }),
+		]);
+		assert.equal(
+			(await store.getSession(memberCaller, identity)).title,
+			`Stable ${source} tie`,
+		);
+		await store.ingest(device, policy.revision, [
+			{
+				...event("real-title", policy.revision, identity.sourceSessionId),
+				payload: { title: ` Native ${source} title ` },
+			},
+		]);
+		await store.ingest(device, policy.revision, [
+			message("even-earlier", 2, { text: "Must not replace native title" }),
+			{
+				...event("blank-title", policy.revision, identity.sourceSessionId),
+				payload: { title: " \n " },
+			},
+		]);
+		assert.equal(
+			(await store.getSession(memberCaller, identity)).title,
+			`Native ${source} title`,
+		);
+	}
+	await store.ingest(deviceCaller, policy.revision, [
+		{
+			...event("no-text", policy.revision, "no-text"),
+			eventType: "user_message",
+			payload: { content: [{ type: "input_image" }] },
+		},
+	]);
+	assert.equal(
+		(
+			await store.getSession(memberCaller, {
+				memberId: member.id,
+				source: "claude",
+				sourceSessionId: "no-text",
+			})
+		).title,
+		null,
+	);
+	await store.ingest(deviceCaller, policy.revision, [
+		{
+			...event("long-message", policy.revision, "long-message"),
+			eventType: "user_message",
+			payload: { text: "😀".repeat(161) },
+		},
+	]);
+	assert.equal(
+		(
+			await store.getSession(memberCaller, {
+				memberId: member.id,
+				source: "claude",
+				sourceSessionId: "long-message",
+			})
+		).title,
+		"😀".repeat(160),
+	);
+});
+
+test("existing archives acquire user-message title fallbacks without changing source titles or trace payloads", {
+	skip: !databaseUrl,
+}, async (context) => {
+	const legacy = await mkdtemp(path.join(tmpdir(), "vault-title-migration-"));
+	context.after(() => rm(legacy, { recursive: true, force: true }));
+	await cp(migrationsDirectory, legacy, { recursive: true });
+	const journalFile = path.join(legacy, "meta", "_journal.json");
+	const journal = JSON.parse(await readFile(journalFile, "utf8"));
+	journal.entries = journal.entries.filter(
+		(entry: { idx: number }) => entry.idx < 2,
+	);
+	await writeFile(journalFile, JSON.stringify(journal));
+	const {
+		store,
+		pool,
+		member,
+		device,
+		policy,
+		memberCaller,
+		databaseUrl: url,
+	} = await fixture(context, false, legacy);
+	const cases: {
+		id: string;
+		title: string | null;
+		payload: TraceEvent["payload"];
+		expected: string | null;
+	}[] = [
+		{
+			id: "plain",
+			title: null,
+			payload: { text: " \n Investigate\t webhook retries " },
+			expected: "Investigate webhook retries",
+		},
+		{
+			id: "message",
+			title: "  ",
+			payload: { text: "\n\u00a0\ufeff", message: "Message\u202f fallback" },
+			expected: "Message fallback",
+		},
+		{
+			id: "blocks",
+			title: null,
+			payload: {
+				content: [
+					{ type: "input_text", text: "Review" },
+					{ type: "input_image", text: "Ignore" },
+					{ type: "text", text: " the migration" },
+				],
+			},
+			expected: "Review the migration",
+		},
+		{
+			id: "native",
+			title: "Original title",
+			payload: { text: "Not the title" },
+			expected: "Original title",
+		},
+		{
+			id: "empty",
+			title: null,
+			payload: { content: [{ type: "input_image" }] },
+			expected: null,
+		},
+		{
+			id: "long",
+			title: null,
+			payload: { text: "😀".repeat(161) },
+			expected: "😀".repeat(160),
+		},
+	];
+	for (const row of cases) {
+		await pool.query(
+			"INSERT INTO vault.trace_sessions (member_id, source, source_session_id, title, event_count) VALUES ($1, 'claude', $2, $3, 3)",
+			[member.id, row.id, row.title],
+		);
+		for (const [id, sequence, payload] of [
+			["later", 20, { text: "Later arrival" }],
+			["😀", 5, { text: "Loses same-sequence tie" }],
+			["\uE000", 5, row.payload],
+		] as const) {
+			const original: TraceEvent = {
+				...event(`${row.id}-${id}`, policy.revision, row.id),
+				eventType: row.id === "empty" ? "assistant_message" : "user_message",
+				sequence,
+				payload,
+			};
+			await pool.query(
+				"INSERT INTO vault.trace_events (member_id, source, source_session_id, event_id, sequence, device_id, payload, capture_authorization, policy_revision) VALUES ($1, 'claude', $2, $3, $4, $5, $6, $7, $8)",
+				[
+					member.id,
+					row.id,
+					original.eventId,
+					sequence,
+					device.id,
+					original,
+					original.capture,
+					policy.revision,
+				],
+			);
+		}
+	}
+	const before = (
+		await pool.query("SELECT payload FROM vault.trace_events ORDER BY event_id")
+	).rows;
+	await migrateVault(url, migrationsDirectory);
+	await migrateVault(url, migrationsDirectory);
+	for (const row of cases) {
+		assert.equal(
+			(
+				await store.getSession(memberCaller, {
+					memberId: member.id,
+					source: "claude",
+					sourceSessionId: row.id,
+				})
+			).title,
+			row.expected,
+		);
+	}
+	assert.deepEqual(
+		(
+			await pool.query(
+				"SELECT payload FROM vault.trace_events ORDER BY event_id",
+			)
+		).rows,
+		before,
 	);
 });
 

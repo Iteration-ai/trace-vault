@@ -15,6 +15,13 @@
 			"when": 1793321673574,
 			"tag": "0001_vault_browse_projections",
 			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1793395573862,
+			"tag": "0002_session_message_preview",
+			"breakpoints": true
 		}
 	]
 }

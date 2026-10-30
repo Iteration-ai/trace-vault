@@ -228,17 +228,17 @@ export function Sessions({
 														size="sm"
 														className="w-full min-w-0 justify-start"
 														data-session-id={session.id}
-														aria-label={`Open session ${session.title || session.sourceSessionId}, ${session.id.slice(0, 8)}, ${session.sourceSessionId}, ${session.contributorName}`}
+														aria-label={`Open session ${session.title || "Untitled session"}, ${session.id.slice(0, 8)}, ${session.sourceSessionId}, ${session.contributorName}`}
 														onClick={() => open(session)}
 													>
 														<span
 															className={
 																session.title
 																	? "truncate text-fg"
-																	: "truncate font-mono text-xs text-fg-2"
+																	: "truncate text-fg-2"
 															}
 														>
-															{session.title || session.sourceSessionId}
+															{session.title || "Untitled session"}
 														</span>
 														<span className="shrink-0 font-mono text-2xs text-fg-3">
 															{session.id.slice(0, 8)}

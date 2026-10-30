@@ -21,7 +21,7 @@ import type {
 	VaultSource,
 } from "./store-contracts.js";
 
-const vaultSchema = pgSchema("vault");
+export const vaultSchema = pgSchema("vault");
 const createdAt = () =>
 	timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const tokenHash = () => text("token_hash").notNull().unique();
@@ -116,6 +116,9 @@ export const traceSessions = vaultSchema.table(
 		projectId: text("project_id"),
 		cwd: text("cwd"),
 		title: text("title"),
+		firstUserMessage: text("first_user_message"),
+		firstUserMessageSequence: integer("first_user_message_sequence"),
+		firstUserMessageEventId: text("first_user_message_event_id"),
 		repository: text("repository"),
 		eventCount: integer("event_count").notNull().default(0),
 		lastReceivedAt: timestamp("last_received_at", {

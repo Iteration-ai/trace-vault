@@ -116,7 +116,7 @@ export function SessionDetail({
 						tabIndex={-1}
 						className="truncate text-2xl font-medium outline-none"
 					>
-						{session.title || "Session"}
+						{session.title || "Untitled session"}
 					</h1>
 					<p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-3">
 						<span>{session.source}</span>
