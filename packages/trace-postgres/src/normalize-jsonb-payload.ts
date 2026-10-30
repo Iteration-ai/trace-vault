@@ -1,5 +1,8 @@
 import type { JsonValue } from "iteration-trace-contracts";
+import * as z from "zod";
 
+const stringValue = z.string();
+const unchangedScalar = z.union([z.number(), z.boolean(), z.null()]);
 const unpairedSurrogate =
 	/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
 
@@ -16,7 +19,7 @@ function normalizeString(value: string): string {
 }
 
 function normalizeValue(value: JsonValue): JsonValue {
-	if (typeof value === "string") return normalizeString(value);
+	if (stringValue.validate(value)) return normalizeString(value);
 	if (Array.isArray(value)) {
 		let normalized: JsonValue[] | undefined;
 		for (let index = 0; index < value.length; index++) {
@@ -29,7 +32,7 @@ function normalizeValue(value: JsonValue): JsonValue {
 		}
 		return normalized ?? value;
 	}
-	if (value === null || typeof value !== "object") return value;
+	if (unchangedScalar.validate(value)) return value;
 	const entries = Object.entries(value);
 	let normalizedEntries: [string, JsonValue][] | undefined;
 	let changedKey = false;

@@ -6,6 +6,7 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
 	parseTraceEventBatch,
@@ -677,7 +678,10 @@ test("ongoing foreground collection exits cleanly on SIGTERM and removes its dev
 });
 
 test("account enrollment and password command-line arguments are rejected before any local history scan", async () => {
-	const args = ["--import=tsx", "packages/cli/src/vault-cli.ts"];
+	const args = [
+		"--import=tsx",
+		fileURLToPath(new URL("./vault-cli.ts", import.meta.url)),
+	];
 	for (const source of ["codex", "cursor"]) {
 		await assert.rejects(
 			run(process.execPath, [...args, "approve-account", source]),

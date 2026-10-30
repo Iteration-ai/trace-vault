@@ -102,9 +102,7 @@ const icons = {
 
 export type IconName = keyof typeof icons;
 
-export const iconNames = Object.keys(icons) as IconName[];
-
-export const iconSizes = ["xs", "sm", "md", "lg"] as const;
+const iconSizes = ["xs", "sm", "md", "lg"] as const;
 export type IconSize = (typeof iconSizes)[number];
 
 const iconPixels = {

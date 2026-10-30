@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export const panelPaddings = ["none", "sm", "md"] as const;
+const panelPaddings = ["none", "sm", "md"] as const;
 export type PanelPadding = (typeof panelPaddings)[number];
 
 const panelPaddingClasses = {

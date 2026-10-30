@@ -1,6 +1,3 @@
-export const tableFrameClass =
-	"overflow-x-auto rounded-lg border border-line bg-surface";
-
 export const tableClasses = {
 	compact: "w-full border-collapse text-left",
 	regular: "w-full min-w-[760px] border-collapse text-left",
@@ -13,8 +10,6 @@ export const tableHeadRowClass =
 export const tableHeaderCellClass = "h-9 px-4 font-medium";
 
 export const tableBodyClass = "divide-y divide-line-subtle";
-
-export const tableCellClass = "px-4 py-3 align-top text-sm";
 
 export const tableDenseCellClass =
 	"h-8 px-4 py-0 align-middle text-sm whitespace-nowrap";

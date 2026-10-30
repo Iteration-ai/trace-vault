@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Icon, type IconName } from "./icon";
 
-export const noticeTones = ["ok", "err", "warn", "neutral"] as const;
+const noticeTones = ["ok", "err", "warn", "neutral"] as const;
 export type NoticeTone = (typeof noticeTones)[number];
 
 const noticeToneClasses = {

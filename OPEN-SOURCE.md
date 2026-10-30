@@ -8,7 +8,6 @@ The following paths originate from the Apache-2.0 grant in Thytu/Iteration's
 - `packages/cli/`
 - `packages/trace-contracts/`
 - `src/shared/ui/`
-- `src/shared/contracts/`
 - `src/app/globals.css`
 
 Standalone build, packaging, documentation and workflow support is also

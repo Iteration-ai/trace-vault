@@ -1,8 +1,5 @@
 import type { ReactNode } from "react";
 
-export const listRowLinkClass =
-	"group flex min-w-0 items-center gap-3 px-4 py-2.5 text-fg no-underline transition-colors hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent";
-
 export function List({
 	label,
 	children,

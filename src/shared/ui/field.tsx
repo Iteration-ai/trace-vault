@@ -3,11 +3,10 @@ import type {
 	ReactNode,
 	Ref,
 	SelectHTMLAttributes,
-	TextareaHTMLAttributes,
 } from "react";
 import { Icon, type IconName } from "./icon";
 
-export const fieldSizes = ["md", "lg"] as const;
+const fieldSizes = ["md", "lg"] as const;
 export type FieldSize = (typeof fieldSizes)[number];
 
 const controlBaseClass =
@@ -64,19 +63,6 @@ export function Input({
 			className={
 				className ? inputClasses(size) + " " + className : inputClasses(size)
 			}
-			{...props}
-		/>
-	);
-}
-
-export function Textarea({
-	className,
-	...props
-}: Readonly<TextareaHTMLAttributes<HTMLTextAreaElement>>) {
-	const textareaClass = controlBaseClass + " min-h-24 px-3.5 py-3 text-md";
-	return (
-		<textarea
-			className={className ? textareaClass + " " + className : textareaClass}
 			{...props}
 		/>
 	);

@@ -8,7 +8,6 @@ COPY packages/trace-contracts packages/trace-contracts
 COPY packages/trace-postgres packages/trace-postgres
 COPY packages/vault packages/vault
 COPY src/shared/ui src/shared/ui
-COPY src/shared/contracts src/shared/contracts
 COPY src/app/globals.css src/app/globals.css
 RUN pnpm install --frozen-lockfile && pnpm --filter trace-vault build
 RUN pnpm --filter trace-vault --prod deploy --legacy /output
