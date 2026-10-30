@@ -1,0 +1,14 @@
+title = "Trace Vault secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Known synthetic secret verifies redaction through the real collector; it grants no access."
+condition = "AND"
+paths = ['''^(packages/cli/src/vault-collector\.test\.ts|scripts/rehearse\.mjs)$''']
+regexTarget = "secret"
+regexes = ['''^companyfixturesecret123456789$''']

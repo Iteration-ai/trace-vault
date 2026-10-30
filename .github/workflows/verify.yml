@@ -1,0 +1,103 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install verified Gitleaks 8.30.1
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+            --output gitleaks.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum --check
+          tar -xzf gitleaks.tar.gz gitleaks
+      - name: Scan committed source and history
+        run: '"$RUNNER_TEMP/gitleaks" git --config=.gitleaks.toml --redact=100 --no-banner --log-opts=HEAD .'
+
+  verify:
+    name: Build, types, tests and packaged runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17.11@sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f
+        env:
+          POSTGRES_USER: vault_test
+          POSTGRES_PASSWORD: vault_test
+          POSTGRES_DB: vault_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vault_test -d vault_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      VAULT_TEST_DATABASE_URL: postgresql://vault_test:vault_test@127.0.0.1:5432/vault_test
+      DATABASE_URL: ""
+      TYPESAFE_API_KEY: ""
+      VAULT_DATABASE_PASSWORD: synthetic-ci-database-password-not-production
+      VAULT_BOOTSTRAP_TOKEN: synthetic-ci-bootstrap-token-not-production
+      VAULT_IMAGE: trace-vault:local
+      COMPOSE_PROJECT_NAME: trace-vault-ci
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.22.0
+          package-manager-cache: false
+      - name: Install pinned pnpm
+        run: corepack enable && corepack prepare pnpm@10.20.0 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm pack:collector && pnpm smoke:collector
+      - name: Build standalone image
+        run: |
+          docker build -f packages/vault/Dockerfile -t trace-vault:local \
+            --label "org.opencontainers.image.source=https://github.com/Iteration-ai/trace-vault" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" .
+          test "$(docker image inspect trace-vault:local --format '{{.Config.User}}')" = node
+      - name: Run standalone image against disposable PostgreSQL
+        run: |
+          docker compose up --no-build --detach --wait --wait-timeout 120
+          curl --fail --silent http://127.0.0.1:4310/health
+          curl --fail --silent http://127.0.0.1:4310/ready
+          curl --fail --silent http://127.0.0.1:4310/ > /dev/null
+          test "$(docker compose exec -T vault id -u)" != 0
+      - name: Rehearse collection, replacement, restore and recovery
+        run: node scripts/rehearse.mjs
+      - name: Save verified release inputs
+        run: |
+          docker image inspect trace-vault:local --format '{{.Id}}' > artifacts/image-id.txt
+          docker save trace-vault:local | gzip > artifacts/trace-vault-image.tar.gz
+          cd artifacts
+          sha256sum thytu-trace-vault-collector-*.tgz trace-vault-image.tar.gz image-id.txt > SHA256SUMS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verified-release-inputs
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Container diagnostics
+        if: failure()
+        run: docker compose ps --all && docker compose logs --no-color
+      - name: Remove disposable containers and data
+        if: always()
+        run: docker compose down --volumes --remove-orphans

@@ -1,0 +1,32 @@
+services:
+  database:
+    image: postgres:17.11@sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f
+    environment:
+      POSTGRES_DB: trace_vault
+      POSTGRES_USER: trace_vault
+      POSTGRES_PASSWORD: ${VAULT_DATABASE_PASSWORD:?Set VAULT_DATABASE_PASSWORD}
+    volumes:
+      - vault-database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trace_vault -d trace_vault"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  vault:
+    image: ${VAULT_IMAGE:-trace-vault:local}
+    build:
+      context: ../..
+      dockerfile: packages/vault/Dockerfile
+    environment:
+      VAULT_DATABASE_URL: postgresql://trace_vault:${VAULT_DATABASE_PASSWORD:?Set VAULT_DATABASE_PASSWORD}@database:5432/trace_vault
+      VAULT_BOOTSTRAP_TOKEN: ${VAULT_BOOTSTRAP_TOKEN:?Set VAULT_BOOTSTRAP_TOKEN}
+      VAULT_PUBLIC_URL: ${VAULT_PUBLIC_URL:-http://localhost:4310}
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${VAULT_PORT:-4310}:4310"
+    restart: unless-stopped
+volumes:
+  vault-database:

@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag (v0.1.0); select the same tag as the workflow ref
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trace-vault-release
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: github.repository == 'Iteration-ai/trace-vault'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.22.0
+          package-manager-cache: false
+      - name: Verify immutable tag and package versions
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: node scripts/check-release.mjs
+  verify:
+    needs: preflight
+    uses: ./.github/workflows/verify.yml
+  publish:
+    needs: [preflight, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.22.0
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Install npm with OIDC trusted publishing support
+        run: npm install --global npm@11.19.1
+      - name: Recheck tag after approval
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: node scripts/check-release.mjs
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: verified-release-inputs
+          path: artifacts
+      - name: Verify the tested artifacts
+        run: |
+          cd artifacts
+          sha256sum --check SHA256SUMS
+          docker load < trace-vault-image.tar.gz
+          test "$(docker image inspect trace-vault:local --format '{{.Id}}')" = "$(cat image-id.txt)"
+          test "$(docker image inspect trace-vault:local --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$GITHUB_SHA"
+      - name: Publish the tested collector using npm OIDC
+        run: |
+          VERSION="$(node -p 'require("./packages/cli/package.json").version')"
+          npm publish "artifacts/thytu-trace-vault-collector-${VERSION}.tgz" --access public --provenance
+      - name: Publish the tested server image using GITHUB_TOKEN
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          trap 'docker logout ghcr.io' EXIT
+          docker tag trace-vault:local "ghcr.io/iteration-ai/trace-vault:$RELEASE_TAG"
+          docker push "ghcr.io/iteration-ai/trace-vault:$RELEASE_TAG"
+      - name: Create GitHub release with collector and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          gh release create "$RELEASE_TAG" --verify-tag --target "$GITHUB_SHA" \
+            --title "Trace Vault $RELEASE_TAG" --generate-notes \
+            artifacts/thytu-trace-vault-collector-*.tgz artifacts/SHA256SUMS artifacts/image-id.txt

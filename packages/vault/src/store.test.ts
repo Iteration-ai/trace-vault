@@ -1,0 +1,708 @@
+import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
+import { test, type TestContext } from "node:test";
+import type { TraceEvent } from "iteration-trace-contracts";
+import { Pool } from "pg";
+import { migrateVault } from "./migrate.js";
+import { VaultStore } from "./store.js";
+import { VaultStoreError, type VaultCaller } from "./store-contracts.js";
+
+const databaseUrl = process.env.VAULT_TEST_DATABASE_URL;
+const tokenHash = (value: string) =>
+	createHash("sha256").update(value).digest("hex");
+const token = (value: string) => ({
+	tokenHash: tokenHash(value),
+	expiresAt: new Date(Date.now() + 3600000),
+});
+const caller = (
+	value: string,
+	kind: "session" | "device" = "session",
+): VaultCaller => ({ kind, tokenHash: tokenHash(value) });
+const errorCode = (code: string) => (error: unknown) =>
+	error instanceof VaultStoreError && error.code === code;
+
+async function fixture(context: TestContext, raceBootstrap = false) {
+	assert.ok(
+		databaseUrl,
+		"Set VAULT_TEST_DATABASE_URL to an explicit disposable local PostgreSQL URL",
+	);
+	const url = new URL(databaseUrl);
+	assert.ok(
+		["localhost", "127.0.0.1", "[::1]"].includes(url.hostname),
+		"Vault tests require local disposable Postgres",
+	);
+	const admin = new Pool({ connectionString: databaseUrl });
+	const database = `vault_test_${randomUUID().replaceAll("-", "")}`;
+	await admin.query(`CREATE DATABASE "${database}"`);
+	url.pathname = `/${database}`;
+	const pool = new Pool({ connectionString: url.toString() });
+	const store = new VaultStore(url.toString());
+	context.after(async () => {
+		await store.close();
+		await pool.end();
+		await admin.query(`DROP DATABASE "${database}"`);
+		await admin.end();
+	});
+	const migrationsDirectory = fileURLToPath(
+		new URL("../migrations", import.meta.url),
+	);
+	await Promise.all(
+		Array.from({ length: raceBootstrap ? 2 : 1 }, () =>
+			migrateVault(url.toString(), migrationsDirectory),
+		),
+	);
+	await store.ready();
+	assert.deepEqual(await store.status(), {
+		initialized: false,
+		name: null,
+		id: null,
+	});
+	const initialIdentity = {
+		email: " ADMIN@example.test ",
+		name: "Administrator",
+		passwordHash: "synthetic-admin-password-hash",
+	};
+	const attempts = await Promise.allSettled(
+		Array.from({ length: raceBootstrap ? 2 : 1 }, () =>
+			store.initialize("Synthetic Company", initialIdentity),
+		),
+	);
+	assert.equal(
+		attempts.filter((result) => result.status === "fulfilled").length,
+		1,
+	);
+	if (raceBootstrap)
+		assert.equal(
+			attempts.filter(
+				(result) =>
+					result.status === "rejected" &&
+					errorCode("already_initialized")(result.reason),
+			).length,
+			1,
+		);
+	const winner = attempts.find((result) => result.status === "fulfilled");
+	assert.ok(winner?.status === "fulfilled");
+	const initial = winner.value;
+	const status = await store.status();
+	assert.equal(status.initialized, true);
+	assert.equal(status.name, "Synthetic Company");
+	assert.match(status.id ?? "", /^[a-f0-9-]{36}$/);
+	await store.login(
+		"admin@example.test",
+		async (hash) => hash === "synthetic-admin-password-hash",
+		token("admin"),
+	);
+	const adminCaller = caller("admin");
+	const invite = await store.createInvitation(
+		adminCaller,
+		{ email: "member@example.test", name: "Member", role: "member" },
+		token("invite"),
+	);
+	const member = await store.redeemInvitation(
+		tokenHash("invite"),
+		"synthetic-member-password-hash",
+		token("member"),
+	);
+	const memberCaller = caller("member");
+	const policy = await store.updateRepositories(adminCaller, [
+		"github.com/synthetic/company",
+	]);
+	const device = await store.enrollDevice(memberCaller, {
+		source: "claude",
+		name: "Synthetic machine",
+		tokenHash: tokenHash("device"),
+	});
+	return {
+		store,
+		pool,
+		initial,
+		member,
+		invite,
+		policy,
+		device,
+		adminCaller,
+		memberCaller,
+		deviceCaller: caller("device", "device"),
+	};
+}
+
+function event(
+	eventId: string,
+	revision: number,
+	sessionId = "source-session",
+): TraceEvent {
+	return {
+		eventId,
+		sessionId,
+		sequence: 0,
+		callId: null,
+		projectId: "project-1",
+		occurredAt: "2026-01-01T00:00:00.000Z",
+		eventType: "session_meta",
+		payload: {
+			cwd: "/synthetic/repository",
+			title: "Source title",
+			git: { repository_url: "git@github.com:synthetic/company.git" },
+			full: ["original", { nested: true }],
+		},
+		capture: {
+			revision,
+			basis: "repository",
+			reference: "github.com/synthetic/company",
+		},
+	};
+}
+
+test("vault bootstrap, password authentication, single-use invitation, and last-admin gate", {
+	skip: !databaseUrl,
+}, async (context) => {
+	const { store, initial, member, adminCaller, memberCaller, invite, pool } =
+		await fixture(context);
+	assert.equal(initial.email, "admin@example.test");
+	assert.equal(initial.role, "admin");
+	assert.equal(member.role, "member");
+	await assert.rejects(
+		store.initialize("Other", {
+			email: "other@example.test",
+			name: "Other",
+			passwordHash: "other",
+		}),
+		errorCode("already_initialized"),
+	);
+	await assert.rejects(
+		store.login("admin@example.test", async () => false, token("bad-login")),
+		errorCode("unauthorized"),
+	);
+	let dummyVerified = false;
+	await assert.rejects(
+		store.login(
+			"nonexistent@example.test",
+			async () => {
+				dummyVerified = true;
+				return true;
+			},
+			token("nonexistent"),
+		),
+		errorCode("unauthorized"),
+	);
+	assert.equal(dummyVerified, true);
+	await assert.rejects(
+		store.redeemInvitation(
+			tokenHash("invite"),
+			"another-hash",
+			token("second-redemption"),
+		),
+		errorCode("unauthorized"),
+	);
+	await assert.rejects(
+		store.createInvitation(
+			adminCaller,
+			{ email: "MEMBER@example.test", name: "Duplicate", role: "member" },
+			token("duplicate"),
+		),
+		errorCode("conflict"),
+	);
+	await assert.rejects(
+		store.updateMember(adminCaller, initial.id, {
+			role: "admin",
+			disabled: true,
+		}),
+		errorCode("conflict"),
+	);
+	await assert.rejects(
+		store.updateMember(adminCaller, initial.id, {
+			role: "member",
+			disabled: false,
+		}),
+		errorCode("conflict"),
+	);
+	const spoofedCaller = { ...memberCaller, role: "admin" };
+	await assert.rejects(
+		store.listMembers(spoofedCaller),
+		errorCode("forbidden"),
+	);
+	assert.equal((await store.me(memberCaller)).id, member.id);
+	assert.equal(
+		(await store.listInvitations(adminCaller)).items.find(
+			(row) => row.id === invite.id,
+		)?.redeemedAt instanceof Date,
+		true,
+	);
+	assert.equal("passwordHash" in (await store.me(adminCaller)), false);
+	await pool.query(
+		"UPDATE vault.auth_sessions SET expires_at = now() - interval '1 second' WHERE token_hash = $1",
+		[tokenHash("member")],
+	);
+	await assert.rejects(store.me(memberCaller), errorCode("unauthorized"));
+	await store.logout(adminCaller);
+	await assert.rejects(store.me(adminCaller), errorCode("unauthorized"));
+});
+
+test("vault ingestion preserves full payload, deduplicates across enrollments, and bounds owner/admin exports", {
+	skip: !databaseUrl,
+}, async (context) => {
+	const { store, member, adminCaller, memberCaller, deviceCaller, policy } =
+		await fixture(context);
+	const original = event("event-1", policy.revision);
+	assert.deepEqual(
+		await store.ingest(deviceCaller, policy.revision, [original, original]),
+		{ acceptedEventIds: ["event-1"], insertedCount: 1 },
+	);
+	await store.enrollDevice(memberCaller, {
+		source: "claude",
+		name: "Second machine",
+		tokenHash: tokenHash("device-2"),
+	});
+	assert.equal(
+		(
+			await store.ingest(caller("device-2", "device"), policy.revision, [
+				original,
+			])
+		).insertedCount,
+		0,
+	);
+	assert.equal(
+		(
+			await store.ingest(deviceCaller, policy.revision, [
+				event("event-2", policy.revision, "other-session"),
+			])
+		).insertedCount,
+		1,
+	);
+	const identity = {
+		memberId: member.id,
+		source: "claude" as const,
+		sourceSessionId: "source-session",
+	};
+	const detail = await store.getSession(memberCaller, identity);
+	assert.equal(detail.cwd, "/synthetic/repository");
+	assert.equal(detail.title, "Source title");
+	assert.equal(detail.projectId, "project-1");
+	assert.equal(detail.repository, "github.com/synthetic/company");
+	assert.equal(detail.eventCount, 1);
+	assert.equal(detail.contributorName, "Member");
+	assert.equal(detail.contributorId, member.id);
+	assert.deepEqual(await store.getSessionById(memberCaller, detail.id), detail);
+	await store.ingest(deviceCaller, policy.revision, [original]);
+	const retried = await store.getSessionById(memberCaller, detail.id);
+	assert.equal(retried.eventCount, 1);
+	assert.deepEqual(retried.lastReceivedAt, detail.lastReceivedAt);
+	const saved = (await store.readEvents(memberCaller, identity)).items;
+	assert.equal(saved.length, 1);
+	assert.deepEqual(saved[0]?.payload, original);
+	assert.deepEqual(saved[0]?.captureAuthorization, original.capture);
+	assert.equal(saved[0]?.memberId, member.id);
+	const page = await store.listSessions(memberCaller, { limit: 1 });
+	assert.equal(page.items.length, 1);
+	assert.ok(page.nextCursor);
+	const second = await store.listSessions(memberCaller, {
+		after: page.nextCursor,
+		limit: 1,
+	});
+	assert.equal(second.items.length, 1);
+	assert.notEqual(page.items[0]?.id, second.items[0]?.id);
+	assert.equal(second.nextCursor, null);
+	const exportPage = await store.readEvents(adminCaller, null, { limit: 1 });
+	assert.equal(exportPage.items.length, 1);
+	assert.ok(exportPage.nextCursor);
+	assert.equal(
+		(
+			await store.readEvents(adminCaller, null, {
+				limit: 1,
+				after: exportPage.nextCursor,
+			})
+		).items.length,
+		1,
+	);
+	await assert.rejects(
+		store.listSessions(memberCaller, { limit: 201 }),
+		errorCode("invalid_input"),
+	);
+	await assert.rejects(
+		store.readEvents(deviceCaller, null),
+		errorCode("forbidden"),
+	);
+});
+
+test("vault policy changes fence ingestion and proofs require approved references", {
+	skip: !databaseUrl,
+}, async (context) => {
+	const { store, adminCaller, memberCaller, deviceCaller, policy } =
+		await fixture(context);
+	const { capture: _capture, ...noProof } = event("missing", policy.revision);
+	await assert.rejects(
+		store.ingest(deviceCaller, policy.revision, [noProof]),
+		errorCode("forbidden"),
+	);
+	await assert.rejects(
+		store.ingest(deviceCaller, policy.revision, [
+			{
+				...event("unapproved", policy.revision),
+				capture: {
+					revision: policy.revision,
+					basis: "repository",
+					reference: "github.com/other/company",
+				},
+			},
+		]),
+		errorCode("forbidden"),
+	);
+	await assert.rejects(
+		store.updateRepositories(memberCaller, []),
+		errorCode("forbidden"),
+	);
+	await assert.rejects(
+		store.updateOwnPolicy(deviceCaller, { accounts: [], locations: [] }),
+		errorCode("forbidden"),
+	);
+	const changed = await store.updateOwnPolicy(memberCaller, {
+		accounts: [
+			{
+				source: "claude",
+				accountId: "synthetic-account",
+				organizationId: null,
+			},
+		],
+		locations: ["/synthetic/research"],
+	});
+	assert.equal(changed.revision, policy.revision + 1);
+	assert.deepEqual(await store.getPolicy(deviceCaller), changed);
+	await assert.rejects(
+		store.ingest(deviceCaller, policy.revision, [
+			event("stale", policy.revision),
+		]),
+		errorCode("policy_changed"),
+	);
+	await assert.rejects(
+		store.ingest(deviceCaller, changed.revision, [
+			event("old-proof", policy.revision),
+		]),
+		errorCode("forbidden"),
+	);
+	const current = {
+		...event("research", changed.revision),
+		capture: {
+			revision: changed.revision,
+			basis: "location" as const,
+			reference: "/synthetic/research",
+		},
+	};
+	assert.equal(
+		(await store.ingest(deviceCaller, changed.revision, [current]))
+			.insertedCount,
+		1,
+	);
+	const result = await Promise.allSettled([
+		store.ingest(deviceCaller, changed.revision, [
+			event("racing", changed.revision),
+		]),
+		store.updateRepositories(adminCaller, []),
+	]);
+	assert.equal(result[1]?.status, "fulfilled");
+	if (result[0]?.status === "rejected")
+		assert.ok(errorCode("policy_changed")(result[0].reason));
+	assert.equal(
+		(await store.getPolicy(deviceCaller)).revision,
+		changed.revision + 1,
+	);
+});
+
+test("vault owner isolation, revocation, disabled-member retention, and secret-free audit", {
+	skip: !databaseUrl,
+}, async (context) => {
+	const {
+		store,
+		member,
+		initial,
+		adminCaller,
+		memberCaller,
+		deviceCaller,
+		device,
+		policy,
+	} = await fixture(context);
+	await store.ingest(deviceCaller, policy.revision, [
+		event("retained", policy.revision),
+	]);
+	await store.createInvitation(
+		adminCaller,
+		{ email: "coworker@example.test", name: "Coworker", role: "member" },
+		token("coworker-invite"),
+	);
+	await store.redeemInvitation(
+		tokenHash("coworker-invite"),
+		"coworker-hash",
+		token("coworker"),
+	);
+	const coworker = caller("coworker");
+	const identity = {
+		memberId: member.id,
+		source: "claude" as const,
+		sourceSessionId: "source-session",
+	};
+	assert.deepEqual((await store.listSessions(coworker)).items, []);
+	assert.deepEqual((await store.readEvents(coworker, null)).items, []);
+	const session = await store.getSession(memberCaller, identity);
+	await assert.rejects(
+		store.getSessionById(coworker, session.id),
+		errorCode("not_found"),
+	);
+	assert.equal(
+		(await store.getSessionById(adminCaller, session.id)).memberId,
+		member.id,
+	);
+	await assert.rejects(
+		store.getSession(coworker, identity),
+		errorCode("forbidden"),
+	);
+	await assert.rejects(
+		store.readEvents(coworker, identity),
+		errorCode("forbidden"),
+	);
+	await assert.rejects(
+		store.deleteSession(coworker, identity),
+		errorCode("forbidden"),
+	);
+	await assert.rejects(
+		store.revokeDevice(coworker, device.id),
+		errorCode("forbidden"),
+	);
+	await assert.rejects(store.listAudit(memberCaller), errorCode("forbidden"));
+	await store.updateMember(adminCaller, member.id, {
+		disabled: true,
+	});
+	await assert.rejects(store.me(memberCaller), errorCode("unauthorized"));
+	await assert.rejects(
+		store.getPolicy(deviceCaller),
+		errorCode("unauthorized"),
+	);
+	await assert.rejects(
+		store.ingest(deviceCaller, policy.revision, [
+			event("disabled", policy.revision),
+		]),
+		errorCode("unauthorized"),
+	);
+	assert.equal((await store.readEvents(adminCaller, identity)).items.length, 1);
+	assert.equal((await store.listSessions(adminCaller)).items.length, 1);
+	await store.updateMember(adminCaller, member.id, {
+		role: "member",
+		disabled: false,
+	});
+	await assert.rejects(store.me(memberCaller), errorCode("unauthorized"));
+	await store.login(
+		"member@example.test",
+		async (hash) => hash === "synthetic-member-password-hash",
+		token("member-new"),
+	);
+	await store.enrollDevice(caller("member-new"), {
+		source: "codex",
+		name: "New",
+		tokenHash: tokenHash("fresh-device"),
+	});
+	await assert.rejects(
+		store.getPolicy(deviceCaller),
+		errorCode("unauthorized"),
+	);
+	const audit = await store.listAudit(adminCaller, { limit: 1 });
+	assert.equal(audit.items.length, 1);
+	assert.ok(audit.nextCursor);
+	const actions = (await store.listAudit(adminCaller)).items;
+	assert.ok(
+		actions.some(
+			(row) =>
+				row.action === "member.updated" &&
+				row.targetId === member.id &&
+				row.actorId === initial.id,
+		),
+	);
+	assert.equal(JSON.stringify(actions).includes("password"), false);
+	assert.equal(JSON.stringify(actions).includes(tokenHash("device")), false);
+});
+
+test("vault deletion tombstones survive retry, enrollment changes, and source/session identity reuse", {
+	skip: !databaseUrl,
+}, async (context) => {
+	const {
+		store,
+		member,
+		adminCaller,
+		memberCaller,
+		deviceCaller,
+		device,
+		policy,
+	} = await fixture(context);
+	const original = event("deleted-event", policy.revision);
+	await store.ingest(deviceCaller, policy.revision, [original]);
+	const identity = {
+		memberId: member.id,
+		source: "claude" as const,
+		sourceSessionId: original.sessionId,
+	};
+	await store.deleteSession(memberCaller, identity);
+	assert.deepEqual((await store.readEvents(adminCaller, null)).items, []);
+	assert.deepEqual((await store.listSessions(memberCaller)).items, []);
+	await assert.rejects(
+		store.getSession(memberCaller, identity),
+		errorCode("not_found"),
+	);
+	await store.revokeDevice(memberCaller, device.id);
+	await assert.rejects(
+		store.ingest(deviceCaller, policy.revision, [original]),
+		errorCode("unauthorized"),
+	);
+	await store.enrollDevice(memberCaller, {
+		source: "claude",
+		name: "Reenrolled",
+		tokenHash: tokenHash("replacement"),
+	});
+	const replacement = caller("replacement", "device");
+	assert.deepEqual(
+		await store.ingest(replacement, policy.revision, [original]),
+		{ acceptedEventIds: [original.eventId], insertedCount: 0 },
+	);
+	assert.equal(
+		(
+			await store.ingest(replacement, policy.revision, [
+				{ ...original, sessionId: "renamed-session" },
+			])
+		).insertedCount,
+		0,
+	);
+	assert.equal(
+		(
+			await store.ingest(replacement, policy.revision, [
+				event("new-id-deleted-session", policy.revision),
+			])
+		).insertedCount,
+		0,
+	);
+	await store.enrollDevice(memberCaller, {
+		source: "codex",
+		name: "Other source",
+		tokenHash: tokenHash("codex"),
+	});
+	assert.equal(
+		(await store.ingest(caller("codex", "device"), policy.revision, [original]))
+			.insertedCount,
+		1,
+	);
+	await store.deleteSession(adminCaller, { ...identity, source: "codex" });
+	await store.deleteSession(memberCaller, identity);
+	assert.deepEqual((await store.readEvents(adminCaller, null)).items, []);
+	assert.ok(
+		(await store.listAudit(adminCaller)).items.some(
+			(row) => row.action === "session.deleted",
+		),
+	);
+});
+
+test("vault concurrent bootstrap and invitation redemption have exactly one winner", {
+	skip: !databaseUrl,
+}, async (context) => {
+	const { store, adminCaller } = await fixture(context, true);
+	await store.createInvitation(
+		adminCaller,
+		{ email: "race@example.test", name: "Race", role: "admin" },
+		token("race-invite"),
+	);
+	const redeemed = await Promise.allSettled([
+		store.redeemInvitation(tokenHash("race-invite"), "hash-1", token("race-1")),
+		store.redeemInvitation(tokenHash("race-invite"), "hash-2", token("race-2")),
+	]);
+	assert.equal(
+		redeemed.filter((result) => result.status === "fulfilled").length,
+		1,
+	);
+	assert.equal(
+		redeemed.filter(
+			(result) =>
+				result.status === "rejected" &&
+				errorCode("unauthorized")(result.reason),
+		).length,
+		1,
+	);
+	const invitedAdmin = redeemed.find((result) => result.status === "fulfilled");
+	assert.equal(
+		invitedAdmin?.status === "fulfilled" && invitedAdmin.value.role,
+		"admin",
+	);
+});
+
+test("vault timeline cursors preserve sequence order and stable ties, and invitations expire or revoke", {
+	skip: !databaseUrl,
+}, async (context) => {
+	const {
+		store,
+		pool,
+		adminCaller,
+		memberCaller,
+		deviceCaller,
+		member,
+		policy,
+	} = await fixture(context);
+	await store.ingest(deviceCaller, policy.revision, [
+		{ ...event("later", policy.revision), sequence: 7 },
+		{ ...event("tie-z", policy.revision), sequence: 2 },
+		{ ...event("tie-a", policy.revision), sequence: 2 },
+	]);
+	const identity = {
+		memberId: member.id,
+		source: "claude" as const,
+		sourceSessionId: "source-session",
+	};
+	const first = await store.readEvents(memberCaller, identity, { limit: 1 });
+	assert.equal(first.items[0]?.eventId, "tie-a");
+	assert.ok(first.nextCursor);
+	const second = await store.readEvents(memberCaller, identity, {
+		limit: 1,
+		after: first.nextCursor,
+	});
+	assert.equal(second.items[0]?.eventId, "tie-z");
+	assert.ok(second.nextCursor);
+	const third = await store.readEvents(memberCaller, identity, {
+		limit: 1,
+		after: second.nextCursor,
+	});
+	assert.equal(third.items[0]?.eventId, "later");
+	assert.equal(third.nextCursor, null);
+	assert.equal((await store.getSession(memberCaller, identity)).eventCount, 3);
+	await assert.rejects(
+		store.readEvents(memberCaller, identity, { after: "garbage" }),
+		errorCode("invalid_input"),
+	);
+	await assert.rejects(
+		store.listSessions(memberCaller, { after: "garbage" }),
+		errorCode("invalid_input"),
+	);
+	const invite = await store.createInvitation(
+		adminCaller,
+		{ email: "revoked@example.test", name: "Revoked", role: "member" },
+		token("revoked-invite"),
+	);
+	await store.revokeInvitation(adminCaller, invite.id);
+	await assert.rejects(
+		store.redeemInvitation(
+			tokenHash("revoked-invite"),
+			"hash",
+			token("revoked-session"),
+		),
+		errorCode("unauthorized"),
+	);
+	await store.createInvitation(
+		adminCaller,
+		{ email: "expired@example.test", name: "Expired", role: "member" },
+		token("expired-invite"),
+	);
+	await pool.query(
+		"UPDATE vault.invitations SET expires_at = now() - interval '1 second' WHERE token_hash = $1",
+		[tokenHash("expired-invite")],
+	);
+	await assert.rejects(
+		store.redeemInvitation(
+			tokenHash("expired-invite"),
+			"hash",
+			token("expired-session"),
+		),
+		errorCode("unauthorized"),
+	);
+});

@@ -1,0 +1,20 @@
+{
+	"version": "7",
+	"dialect": "postgresql",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "7",
+			"when": 1793321495239,
+			"tag": "0000_vault_foundation",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1793321673574,
+			"tag": "0001_vault_browse_projections",
+			"breakpoints": true
+		}
+	]
+}

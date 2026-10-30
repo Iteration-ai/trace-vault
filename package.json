@@ -1,0 +1,35 @@
+{
+	"name": "trace-vault-workspace",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"license": "Apache-2.0",
+	"repository": "github:Iteration-ai/trace-vault",
+	"engines": {
+		"node": "22.22.0"
+	},
+	"packageManager": "pnpm@10.20.0",
+	"scripts": {
+		"build": "pnpm --filter iteration-trace-contracts build && pnpm --filter @thytu/trace-vault-collector build && pnpm --filter trace-vault build",
+		"typecheck": "tsc --noEmit && pnpm --filter iteration-trace-contracts exec tsc --noEmit && pnpm --filter @thytu/trace-vault-collector exec tsc --noEmit && pnpm --filter trace-vault exec tsc --noEmit",
+		"test": "node --import=tsx --test packages/trace-contracts/src/*.test.ts packages/cli/src/*.test.ts packages/vault/src/*.test.ts",
+		"pack:collector": "node scripts/pack-collector.mjs",
+		"smoke:collector": "node scripts/smoke-collector.mjs",
+		"start": "pnpm --filter trace-vault start"
+	},
+	"dependencies": {
+		"lucide-react": "1.47.0",
+		"react": "19.3.0",
+		"react-dom": "19.3.0"
+	},
+	"devDependencies": {
+		"@types/node": "22.20.1",
+		"@types/pg": "8.23.1",
+		"@types/react": "19.3.0",
+		"@types/react-dom": "19.3.0",
+		"drizzle-kit": "0.31.11",
+		"tailwindcss": "4.3.3",
+		"tsx": "4.23.12",
+		"typescript": "5.9.3"
+	}
+}

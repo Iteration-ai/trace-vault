@@ -1,0 +1,322 @@
+@import "tailwindcss";
+
+@theme static {
+	--color-*: initial;
+
+	--color-canvas: #08090a;
+	--color-surface: #0e0f11;
+	--color-raised: #141517;
+	--color-overlay: #1a1b1e;
+	--color-hover: rgb(255 255 255 / 4%);
+	--color-selected: rgb(255 255 255 / 7%);
+
+	--color-fg: #f7f8f8;
+	--color-fg-2: #d0d3d9;
+	--color-fg-3: #8a8f98;
+	--color-fg-4: #666a71;
+
+	--color-line-subtle: rgb(255 255 255 / 5%);
+	--color-line: rgb(255 255 255 / 8%);
+	--color-line-strong: rgb(255 255 255 / 14%);
+
+	--color-primary: #eeeff1;
+	--color-primary-hover: #ffffff;
+	--color-primary-fg: #08090a;
+
+	--color-accent: #b89be7;
+	--color-accent-fg: #08090a;
+
+	--color-ok: #4cc38a;
+	--color-warn: #e5b454;
+	--color-err: #eb6f6f;
+	--color-info: #5aa9f5;
+
+	--color-actor-human: #e3b56f;
+	--color-actor-agent: #ef8fbf;
+	--color-actor-review: #6cb2f0;
+	--color-actor-tool: #47c1c7;
+
+	--color-chart-1: #b89be7;
+	--color-chart-2: #5aa9f5;
+	--color-chart-3: #47c1c7;
+	--color-chart-4: #e3b56f;
+	--color-chart-5: #ef8fbf;
+	--color-chart-6: #5b5f66;
+
+	--font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+	--font-mono:
+		var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo, monospace;
+
+	--font-weight-*: initial;
+	--font-weight-normal: 400;
+	--font-weight-medium: 510;
+	--font-weight-semibold: 590;
+	--font-weight-bold: 680;
+
+	--tracking-*: initial;
+	--tracking-normal: 0em;
+	--tracking-caps: 0.08em;
+
+	--leading-*: initial;
+	--leading-none: 1;
+	--leading-tight: 1.2;
+	--leading-snug: 1.4;
+	--leading-normal: 1.5;
+	--leading-relaxed: 1.65;
+
+	--text-*: initial;
+	--text-3xs: 0.625rem;
+	--text-3xs--line-height: 0.875rem;
+	--text-3xs--letter-spacing: 0.01em;
+	--text-2xs: 0.6875rem;
+	--text-2xs--line-height: 1rem;
+	--text-2xs--letter-spacing: 0.005em;
+	--text-xs: 0.75rem;
+	--text-xs--line-height: 1rem;
+	--text-xs--letter-spacing: 0em;
+	--text-sm: 0.8125rem;
+	--text-sm--line-height: 1.25rem;
+	--text-sm--letter-spacing: -0.003em;
+	--text-base: 0.875rem;
+	--text-base--line-height: 1.375rem;
+	--text-base--letter-spacing: -0.006em;
+	--text-md: 1rem;
+	--text-md--line-height: 1.5rem;
+	--text-md--letter-spacing: -0.011em;
+	--text-lg: 1.125rem;
+	--text-lg--line-height: 1.625rem;
+	--text-lg--letter-spacing: -0.014em;
+	--text-xl: 1.25rem;
+	--text-xl--line-height: 1.75rem;
+	--text-xl--letter-spacing: -0.017em;
+	--text-2xl: 1.5rem;
+	--text-2xl--line-height: 1.875rem;
+	--text-2xl--letter-spacing: -0.021em;
+	--text-3xl: 2rem;
+	--text-3xl--line-height: 2.375rem;
+	--text-3xl--letter-spacing: -0.026em;
+	--text-4xl: 2.5rem;
+	--text-4xl--line-height: 2.75rem;
+	--text-4xl--letter-spacing: -0.03em;
+	--text-title: clamp(1.75rem, 1.2rem + 1.6vw, 2.375rem);
+	--text-title--line-height: 1.06;
+	--text-title--letter-spacing: -0.035em;
+	--text-headline: clamp(2.125rem, 1.4rem + 2.6vw, 3.5rem);
+	--text-headline--line-height: 1.02;
+	--text-headline--letter-spacing: -0.045em;
+	--text-display: clamp(2.5rem, 1.6rem + 3.6vw, 4.5rem);
+	--text-display--line-height: 1;
+	--text-display--letter-spacing: -0.045em;
+	--text-numeral: clamp(6rem, 15vw, 9rem);
+	--text-numeral--line-height: 1;
+	--text-numeral--letter-spacing: -0.08em;
+	--text-lede: 1.1875rem;
+	--text-lede--line-height: 1.5;
+	--text-lede--letter-spacing: -0.01em;
+	--text-section: 3rem;
+	--text-section--line-height: 1.06;
+	--text-section--letter-spacing: -0.035em;
+	--text-closing: 3.5rem;
+	--text-closing--line-height: 1.04;
+	--text-closing--letter-spacing: -0.04em;
+	--text-hero: 4rem;
+	--text-hero--line-height: 1.02;
+	--text-hero--letter-spacing: -0.045em;
+	--radius-*: initial;
+	--radius-sm: 4px;
+	--radius-md: 6px;
+	--radius-lg: 8px;
+	--radius-xl: 12px;
+	--radius-2xl: 14px;
+
+	--shadow-*: initial;
+	--shadow-sm: var(--elevation-sm);
+	--shadow-md: var(--elevation-md);
+	--shadow-lg: var(--elevation-lg);
+	--elevation-sm:
+		0 1px 0 0 rgb(255 255 255 / 5%) inset, 0 1px 2px 0 rgb(0 0 0 / 40%);
+	--elevation-md:
+		0 0 0 1px rgb(0 0 0 / 20%), 0 1px 0 0 rgb(255 255 255 / 4%) inset,
+		0 12px 32px -8px rgb(0 0 0 / 55%);
+	--elevation-lg:
+		0 1px 0 0 rgb(255 255 255 / 5%) inset, 0 40px 100px -24px rgb(0 0 0 / 60%);
+	--shadow-light-sm: 0 1px 2px 0 rgb(17 17 19 / 6%);
+	--shadow-light-md:
+		0 1px 2px 0 rgb(17 17 19 / 4%), 0 12px 32px -18px rgb(17 17 19 / 18%);
+	--shadow-light-lg:
+		0 1px 2px 0 rgb(17 17 19 / 4%), 0 40px 90px -30px rgb(17 17 19 / 22%);
+
+	--ease-*: initial;
+	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+	--ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+	--default-transition-duration: 150ms;
+	--default-transition-timing-function: var(--ease-out);
+
+	--animate-rise: rise 900ms var(--ease-out) both;
+	--animate-bloom: bloom 1200ms var(--ease-out) both;
+	--animate-appear: appear 600ms var(--ease-out) both;
+	--animate-signal: signal 900ms var(--ease-out) both;
+	--animate-progress: progress 6s linear both;
+
+	@keyframes rise {
+		from {
+			opacity: 0;
+			filter: blur(0.25rem);
+			transform: translateY(1rem);
+		}
+	}
+
+	@keyframes bloom {
+		from {
+			opacity: 0;
+			transform: scale(0.94);
+		}
+	}
+
+	@keyframes appear {
+		from {
+			opacity: 0;
+			transform: translateY(0.5rem);
+		}
+	}
+
+	/* A ring that leaves its element once, growing and fading. */
+	@keyframes signal {
+		from {
+			opacity: 0.5;
+			transform: scale(1);
+		}
+		to {
+			opacity: 0;
+			transform: scale(1.7);
+		}
+	}
+
+	/* Fills a bar from the top; pair with origin-top. */
+	@keyframes progress {
+		from {
+			transform: scaleY(0);
+		}
+	}
+}
+
+/* Staggers entrance motion: each step starts 90 ms after the previous one.
+   An `animate-*` utility sets the `animation` shorthand, which resets the
+   delay, so give the order the same variant as the animation it delays. */
+@utility motion-order-* {
+	animation-delay: calc(--value(integer) * 90ms);
+	transition-delay: calc(--value(integer) * 90ms);
+}
+
+:root {
+	background-color: var(--color-canvas);
+	color: var(--color-fg);
+	color-scheme: dark;
+	font-synthesis: none;
+	text-rendering: optimizeLegibility;
+}
+
+/* Document scope also covers provider portals and the overscroll canvas. */
+[data-theme="light"],
+:root:has([data-theme="light"][data-theme-scope="document"]) {
+	color-scheme: light;
+
+	--color-canvas: #ffffff;
+	--color-surface: #fafafa;
+	--color-raised: #ffffff;
+	--color-overlay: #ffffff;
+	--color-hover: rgb(17 17 19 / 4%);
+	--color-selected: rgb(17 17 19 / 7%);
+
+	--color-fg: #111113;
+	--color-fg-2: #5d5f66;
+	--color-fg-3: #6b6e76;
+	--color-fg-4: #8b8e96;
+
+	--color-line-subtle: rgb(17 17 19 / 6%);
+	--color-line: rgb(17 17 19 / 9%);
+	--color-line-strong: rgb(17 17 19 / 14%);
+
+	--color-primary: #111113;
+	--color-primary-hover: #2c2c31;
+	--color-primary-fg: #ffffff;
+
+	--color-accent: #111113;
+	--color-accent-fg: #ffffff;
+
+	--color-ok: #16804a;
+	--color-warn: #946200;
+	--color-err: #c03a2b;
+	--color-info: #1f6bc4;
+
+	--color-actor-human: #8f6116;
+	--color-actor-agent: #b23f79;
+	--color-actor-review: #2c6aad;
+	--color-actor-tool: #1b7479;
+
+	--color-chart-1: #6f56b8;
+	--color-chart-2: #2f7fd6;
+	--color-chart-3: #1f9aa0;
+	--color-chart-4: #c98a1c;
+	--color-chart-5: #cf4f93;
+	--color-chart-6: #a6a9b0;
+
+	--elevation-sm: var(--shadow-light-sm);
+	--elevation-md: var(--shadow-light-md);
+	--elevation-lg: var(--shadow-light-lg);
+}
+
+/* The marketing layout is composed at 1920×1080: rem-based type and spacing
+   scale together with the width, from 16 px at 1440 to 19.2 px at 1920,
+   capped at 22.4 px. Section links glide instead of jumping, so readers see
+   where they land. */
+:root:has([data-scale="fluid"]) {
+	font-size: clamp(100%, 40% + 0.6667vw, 140%);
+	scroll-behavior: smooth;
+}
+
+/* Large screens give every section exactly one screen, and a section needs up
+   to 50 rem of height. Wide, short windows therefore also scale with the
+   height, down to 14 px. */
+@media (width >= 64rem) {
+	:root:has([data-scale="fluid"]) {
+		font-size: min(clamp(100%, 40% + 0.6667vw, 140%), max(87.5%, 2svh));
+	}
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	min-height: 100vh;
+	min-width: 320px;
+	margin: 0;
+	background-color: var(--color-canvas);
+	font-family: var(--font-sans);
+	font-size: var(--text-base);
+	line-height: var(--text-base--line-height);
+	font-feature-settings: "cv01", "ss03";
+	font-optical-sizing: auto;
+}
+
+code,
+kbd,
+pre,
+samp {
+	font-family: var(--font-mono);
+	font-feature-settings: normal;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	::before,
+	::after {
+		animation-duration: 0.01ms !important;
+		animation-delay: 0ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		transition-delay: 0ms !important;
+		scroll-behavior: auto !important;
+	}
+}

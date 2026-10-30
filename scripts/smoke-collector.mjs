@@ -1,0 +1,71 @@
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+const { name, version } = JSON.parse(
+	await readFile("packages/cli/package.json", "utf8"),
+);
+const tarball = path.resolve(
+	`artifacts/thytu-trace-vault-collector-${version}.tgz`,
+);
+const directory = await mkdtemp(path.join(os.tmpdir(), "trace-vault-pack-"));
+try {
+	execFileSync(
+		"npm",
+		[
+			"install",
+			"--prefix",
+			directory,
+			"--ignore-scripts",
+			"--no-audit",
+			"--no-fund",
+			"--offline",
+			tarball,
+		],
+		{ cwd: directory, stdio: "inherit" },
+	);
+	const root = path.join(directory, "node_modules", name);
+	const manifest = JSON.parse(
+		await readFile(path.join(root, "package.json"), "utf8"),
+	);
+	assert.equal(manifest.name, "@thytu/trace-vault-collector");
+	assert.deepEqual(manifest.bin, { "trace-vault": "./dist/vault-cli.js" });
+	for (const field of [
+		"dependencies",
+		"optionalDependencies",
+		"peerDependencies",
+	])
+		assert.equal(
+			Object.keys(manifest[field] ?? {}).length,
+			0,
+			`unexpected runtime ${field}`,
+		);
+	assert.deepEqual((await readdir(path.join(root, "dist"))).sort(), [
+		"LICENSE",
+		"NOTICE",
+		"OPEN-SOURCE.md",
+		"THIRD-PARTY-NOTICES.txt",
+		"vault-cli.js",
+	]);
+	const help = execFileSync(
+		path.join(directory, "node_modules", ".bin", "trace-vault"),
+		["--help"],
+		{
+			cwd: directory,
+			encoding: "utf8",
+			env: { ...process.env, NODE_PATH: "", NODE_OPTIONS: "" },
+		},
+	);
+	assert.match(help, /trace-vault connect/);
+	assert.match(help, /2\.1\.282/);
+	assert.match(help, /Codex and Cursor account capture is unsupported/);
+	assert.doesNotMatch(help, /iteration start/);
+	process.stdout.write(help);
+	process.stdout.write(
+		`Packed collector ${version}: isolated offline installation and --help passed.\n`,
+	);
+} finally {
+	await rm(directory, { recursive: true, force: true });
+}

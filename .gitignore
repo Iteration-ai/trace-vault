@@ -147,3 +147,11 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Trace Vault build outputs and sensitive operator data
+artifacts/
+coverage/
+backups/
+*.dump
+*.dump.tmp
+.amp/

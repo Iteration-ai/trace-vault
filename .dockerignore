@@ -1,0 +1,12 @@
+.git
+.amp
+**/node_modules
+**/dist
+**/.env*
+!**/.env.example
+artifacts
+coverage
+backups
+*.dump
+*.dump.tmp
+*.tgz
