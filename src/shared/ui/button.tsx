@@ -1,11 +1,6 @@
 import type { ButtonHTMLAttributes } from "react";
 
-const buttonVariants = [
-	"primary",
-	"secondary",
-	"ghost",
-	"danger",
-] as const;
+const buttonVariants = ["primary", "secondary", "ghost", "danger"] as const;
 export type ButtonVariant = (typeof buttonVariants)[number];
 
 const buttonSizes = ["sm", "md", "lg", "icon"] as const;

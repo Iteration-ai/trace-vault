@@ -487,8 +487,12 @@ test("session titles fall back to the first nonempty user message, never assista
 test("existing archives retain titles, public identities and exports through an interrupted, resumed storage upgrade", {
 	skip: !databaseUrl,
 }, async (context) => {
-	const historicalMigrations = await mkdtemp(path.join(tmpdir(), "vault-title-migration-"));
-	context.after(() => rm(historicalMigrations, { recursive: true, force: true }));
+	const historicalMigrations = await mkdtemp(
+		path.join(tmpdir(), "vault-title-migration-"),
+	);
+	context.after(() =>
+		rm(historicalMigrations, { recursive: true, force: true }),
+	);
 	await cp(migrationsDirectory, historicalMigrations, { recursive: true });
 	const journalFile = path.join(historicalMigrations, "meta", "_journal.json");
 	const journal = JSON.parse(await readFile(journalFile, "utf8"));
