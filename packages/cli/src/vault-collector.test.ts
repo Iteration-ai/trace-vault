@@ -536,7 +536,10 @@ test("foreground one-shot CLI uses saved device credentials and reports actual s
 		],
 		{ cwd: path.resolve(import.meta.dirname, "../../.."), timeout: 30_000 },
 	);
-	assert.equal(stderr, "");
+	assert.match(
+		stderr,
+		/^(?:\(node:\d+\) ExperimentalWarning: SQLite is an experimental feature and might change at any time\r?\n\(Use `node --trace-warnings \.\.\.` to show where the warning was created\)\r?\n)?$/,
+	);
 	assert.match(stdout, /"uploaded":[1-9]/);
 	assert.match(JSON.stringify(f.service.events), /foreground-selected/);
 	assert.ok(!JSON.stringify(f.service.events).includes("foreground-rejected"));

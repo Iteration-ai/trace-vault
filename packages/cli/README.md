@@ -3,7 +3,8 @@
 `iteration-trace-collector` is the Apache-2.0 collection library owned by Trace
 Vault. The directory name `packages/cli` is historical; the package has **no
 executable**, account provider, hosted endpoint, product commands, billing client,
-friction-summary integration, launcher or updater. It requires Node.js 22+.
+friction-summary integration, launcher or updater. It requires Node.js 22.22.0
+or later.
 
 The supported API is the package root (`src/index.ts`), with native ESM,
 Node 22 `require(ESM)` and TypeScript declarations. Deep source imports are not an
@@ -32,6 +33,23 @@ try {
   await release();
 }
 ```
+
+Keep the data directory on a local filesystem with working SQLite locks and hard
+links, not a network share. The lock uses Node's built-in SQLite module (which
+emits an experimental-feature warning on Node 22) without adding a dependency.
+Its dedicated `collector.lock.sqlite` file is lock metadata, not trace storage;
+never unlink it while any collector may be running. The OS releases ownership
+when a process exits, including a crash. The retained `collector.lock.owner`
+hard link identifies guard-aware markers, so PID reuse and container PID 1 do
+not block recovery. PID-marker recovery is serialized. Release handles share
+in-flight cleanup, retain ownership after cleanup failure for a safe retry, and
+are idempotent after success.
+
+Stop all older collector versions before upgrading or rolling back. The legacy
+`collector.lock` PID marker remains readable by older versions, but their stale
+recovery is not safe under concurrent mixed-version startup. An empty or invalid
+legacy marker fails closed: stop every writer before removing only that marker
+and restarting. Do not delete collector state or queued events to recover a lock.
 
 ## API responsibilities
 

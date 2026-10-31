@@ -1,7 +1,7 @@
 # Trace Vault collector
 
 `@useiteration/trace-vault-collector` is the independent Apache-2.0 collector for a
-self-hosted Trace Vault. It requires Node.js 22 or later and installs only the
+self-hosted Trace Vault. It requires Node.js 22.22.0 or later and installs only the
 `trace-vault` executable. The bundled collector has no runtime npm dependencies;
 no Iteration account or separately published contracts package is needed.
 
@@ -30,6 +30,11 @@ published by Trace Vault's public collector release workflow.
 Use `codex` or `cursor` for those sources. Passwords and invitation tokens are
 prompted privately. `collect` runs in the foreground; `--once` performs one bounded
 scan/upload tick. No background service or automatic updater is installed.
+
+Keep collector data on a local filesystem, not a network share. Stop older
+collector processes before upgrading or rolling back; never delete
+`collector.lock.sqlite` while a collector could be running. See the reusable
+API's [lock and recovery contract](../cli/README.md) for details.
 
 Explicit repository/location rules authorize existing history and ongoing
 collection, not historical account ownership. Prospective account capture is

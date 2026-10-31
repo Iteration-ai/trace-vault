@@ -214,6 +214,10 @@ reuse a version with different bytes or assume that a failed job published nothi
 
 See [LICENSE](../LICENSE), [NOTICE](../NOTICE), [provenance](../OPEN-SOURCE.md),
 [security reporting](../SECURITY.md) and [contributing](../CONTRIBUTING.md).
-Only the licensed shared/vault paths were extracted from the original working
-tree; no private application source, history, credentials or production data is
-part of this repository.
+The current source tree contains the licensed shared collection/storage engine
+and standalone Vault, not Iteration's private product integration. Earlier public
+revisions included consumer-specific application code; removing it from the
+current tree does not erase that history or revoke its Apache-2.0 grants. See
+[provenance](../OPEN-SOURCE.md) for the scope of the grant. This repository is not
+a copy of Iteration's private Git history; do not commit credentials or production
+data here.

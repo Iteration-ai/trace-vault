@@ -46,6 +46,28 @@ jobs:
       - name: Scan committed source and history
         run: '"$RUNNER_TEMP/gitleaks" git --config=.gitleaks.toml --redact=100 --no-banner --log-opts=HEAD .'
 
+  collector-locks:
+    name: Collector locks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.22.0
+          package-manager-cache: false
+      - name: Install pinned pnpm
+        run: corepack enable && corepack prepare pnpm@10.20.0 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter iteration-trace-contracts build
+      - run: node --import=tsx --test packages/cli/src/collector-lock.test.ts
+
   verify:
     name: Build, types, tests and packaged runtime
     runs-on: ubuntu-latest
