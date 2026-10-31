@@ -102,17 +102,14 @@ const icons = {
 
 export type IconName = keyof typeof icons;
 
-export const iconNames = Object.keys(icons) as IconName[];
-
-export const iconSizes = ["xs", "sm", "md", "lg"] as const;
-export type IconSize = (typeof iconSizes)[number];
+export type IconSize = keyof typeof iconPixels;
 
 const iconPixels = {
 	xs: 12,
 	sm: 14,
 	md: 16,
 	lg: 20,
-} as const satisfies Record<IconSize, number>;
+} as const;
 
 export function Icon({
 	name,

@@ -168,8 +168,10 @@ try {
 		"--pack-destination",
 		scratch,
 	]);
-	const tarball = (await readdir(scratch)).find((name) =>
-		name.endsWith(".tgz"),
+	const tarball = (await readdir(scratch)).find(
+		(name) =>
+			name.startsWith("useiteration-trace-vault-collector-") &&
+			name.endsWith(".tgz"),
 	);
 	assert.ok(tarball);
 	const install = path.join(scratch, "installed");
@@ -302,9 +304,9 @@ try {
 			["Approve? Type yes: ", "yes"],
 		],
 	);
-	const collect = () =>
+	const collect = (executable = cli) =>
 		run(
-			cli,
+			executable,
 			[
 				"collect",
 				"claude",
@@ -392,9 +394,15 @@ try {
 	)
 		.toString()
 		.trim();
-	assert.equal(migrationCount, "3");
+	const migrationJournal = JSON.parse(
+		await readFile(
+			path.join(workspace, "packages/vault/migrations/meta/_journal.json"),
+			"utf8",
+		),
+	);
+	assert.equal(migrationCount, String(migrationJournal.entries.length));
 	process.stdout.write(
-		"PASS ongoing collection, idempotent retries, restart + current-version replacement (3 migrations retained)\n",
+		`PASS ongoing collection and idempotent retries through standalone collector, restart + current-version replacement (${migrationCount} vault migrations retained)\n`,
 	);
 
 	const deletedEvents = expectedExport
@@ -502,7 +510,7 @@ try {
 			"-d",
 			"trace_vault",
 			"-Atc",
-			"SELECT count(*) FROM vault.session_tombstones",
+			"SELECT count(*) FROM vault_traces.trace_session_deletions",
 		)
 	)
 		.toString()

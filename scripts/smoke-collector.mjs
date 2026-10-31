@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 const { name, version } = JSON.parse(
-	await readFile("packages/cli/package.json", "utf8"),
+	await readFile("packages/vault-collector/package.json", "utf8"),
 );
+const published = process.argv[2];
+if (published !== undefined) assert.match(published, /^\d+\.\d+\.\d+$/);
 const tarball = path.resolve(
 	`artifacts/useiteration-trace-vault-collector-${version}.tgz`,
 );
@@ -21,8 +23,9 @@ try {
 			"--ignore-scripts",
 			"--no-audit",
 			"--no-fund",
-			"--offline",
-			tarball,
+			...(published
+				? ["--registry=https://registry.npmjs.org", `${name}@${published}`]
+				: ["--offline", tarball]),
 		],
 		{ cwd: directory, stdio: "inherit" },
 	);
@@ -31,6 +34,7 @@ try {
 		await readFile(path.join(root, "package.json"), "utf8"),
 	);
 	assert.equal(manifest.name, "@useiteration/trace-vault-collector");
+	assert.equal(manifest.version, published ?? version);
 	assert.deepEqual(manifest.bin, { "trace-vault": "./dist/vault-cli.js" });
 	for (const field of [
 		"dependencies",
@@ -49,6 +53,12 @@ try {
 		"THIRD-PARTY-NOTICES.txt",
 		"vault-cli.js",
 	]);
+	if (published === undefined) {
+		assert.doesNotMatch(
+			await readFile(path.join(root, "dist/vault-cli.js"), "utf8"),
+			/useiteration\.com|clerk-device-auth|collector-auth\/expand|collector-progress|friction-summary|codex-billing|cursor-billing|ITERATION_RUNTIME_VERSION/,
+		);
+	}
 	const help = execFileSync(
 		path.join(directory, "node_modules", ".bin", "trace-vault"),
 		["--help"],
@@ -64,7 +74,7 @@ try {
 	assert.doesNotMatch(help, /iteration start/);
 	process.stdout.write(help);
 	process.stdout.write(
-		`Packed collector ${version}: isolated offline installation and --help passed.\n`,
+		`${published ? "Published" : "Packed"} collector ${published ?? version}: isolated ${published ? "public npm" : "offline"} installation and --help passed.\n`,
 	);
 } finally {
 	await rm(directory, { recursive: true, force: true });

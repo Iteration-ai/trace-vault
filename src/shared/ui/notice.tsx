@@ -1,15 +1,14 @@
 import type { ReactNode } from "react";
 import { Icon, type IconName } from "./icon";
 
-export const noticeTones = ["ok", "err", "warn", "neutral"] as const;
-export type NoticeTone = (typeof noticeTones)[number];
+export type NoticeTone = keyof typeof noticeToneClasses;
 
 const noticeToneClasses = {
 	ok: "border-ok/25 bg-ok/10 text-fg",
 	err: "border-err/30 bg-err/10 text-fg",
 	warn: "border-warn/25 bg-warn/10 text-fg",
 	neutral: "border-line bg-raised text-fg-2",
-} as const satisfies Record<NoticeTone, string>;
+} as const;
 
 const noticeIconClasses = {
 	ok: "mt-0.5 text-ok",

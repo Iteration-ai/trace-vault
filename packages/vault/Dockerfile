@@ -3,13 +3,16 @@ WORKDIR /workspace
 RUN corepack enable && corepack prepare pnpm@10.20.0 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/cli/package.json packages/cli/package.json
+COPY packages/vault-collector/package.json packages/vault-collector/package.json
 COPY packages/trace-contracts packages/trace-contracts
+COPY packages/trace-postgres packages/trace-postgres
 COPY packages/vault packages/vault
 COPY src/shared/ui src/shared/ui
-COPY src/shared/contracts src/shared/contracts
 COPY src/app/globals.css src/app/globals.css
 RUN pnpm install --frozen-lockfile && pnpm --filter trace-vault build
 RUN pnpm --filter trace-vault --prod deploy --legacy /output
+RUN test -s /output/node_modules/iteration-trace-postgres/migrate.mjs \
+    && test -s /output/node_modules/iteration-trace-postgres/sql/0001_trace_projections.sql
 
 FROM node:22.22.0-bookworm-slim@sha256:dd9d21971ec4395903fa6143c2b9267d048ae01ca6d3ea96f16cb30df6187d94
 ENV NODE_ENV=production VAULT_HOST=0.0.0.0 VAULT_PORT=4310

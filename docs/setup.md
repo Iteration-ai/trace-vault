@@ -13,8 +13,16 @@ redaction is best effort: traces and backups remain sensitive company data.
 
 ## Quickstart: build from source
 
-**No npm package or container image has been published as part of this extraction.**
-Use the source build below until an operator explicitly performs a release.
+`@useiteration/trace-vault-collector@0.1.0` is available from public npm:
+
+```sh
+npm install --global @useiteration/trace-vault-collector@0.1.0 --ignore-scripts
+trace-vault --help
+```
+
+The `v0.1.0` GHCR image has been published, but anonymous pulls are currently
+blocked. Use the source server build below; publication is not proof of anonymous
+image access. The working tree prepares the next `0.1.1` server/collector release.
 
 Install Docker with Compose v2.20+ (the root file uses Compose `include`), then:
 
@@ -51,14 +59,27 @@ pnpm build
 pnpm typecheck
 pnpm pack:collector
 pnpm smoke:collector
-npm install --global ./artifacts/useiteration-trace-vault-collector-0.1.0.tgz --ignore-scripts
+pnpm pack:contracts
+pnpm smoke:contracts
+pnpm pack:collector-core
+pnpm smoke:collector-core
+pnpm smoke:published
+npm install --global ./artifacts/useiteration-trace-vault-collector-0.1.1.tgz --ignore-scripts
 trace-vault --help
 ```
 
 The collector tarball is self-contained, with no runtime npm dependencies or
 install scripts. Its only executable is `trace-vault`; it does not install or
-depend on `iteration-cli`. `iteration-trace-contracts` is an internal private
-workspace used by the build, not a mandatory published package.
+depend on `iteration-cli`. Its packaging lives in `packages/vault-collector`,
+and its build consumes `packages/cli/src/vault-cli.ts` directly. The historical
+`packages/cli` directory now contains only `iteration-trace-collector`, the
+[reusable collection API](../packages/cli/README.md), and the native vault
+entrypoint. Public `iteration-trace-contracts` owns only event/source/capture
+contracts. The private Iteration repository owns its product CLI, authentication,
+enrollment, billing/friction integrations, launcher, services and updater; no
+Iteration source checkout, account, default endpoint or runtime is needed here.
+The standalone executable bundles its public dependencies; the reusable API
+declares the public type dependencies needed by library consumers.
 
 Run on each developer's machine, using the actual server origin:
 
@@ -98,7 +119,7 @@ for authentication, data ownership, permissions and HTTP contracts.
 
 ## Verification
 
-`pnpm test` runs the copied contract and collector tests plus vault tests. Vault
+`pnpm test` runs the canonical contract and collector tests plus vault tests. Vault
 database/HTTP tests require an explicit **disposable local PostgreSQL 17** URL
 whose role can create/drop databases; without it those tests skip. Never point
 tests at a retained archive. Each database test creates and drops a random database:
@@ -108,23 +129,33 @@ VAULT_TEST_DATABASE_URL=postgresql://vault_test:vault_test@127.0.0.1:5432/vault_
 ```
 
 CI performs frozen install, build, all workspace/shared types, tests against
-disposable pinned PostgreSQL 17.11, offline installation of the packed collector,
-and Docker build/nonroot runtime/readiness checks with a second disposable DB.
+disposable pinned PostgreSQL 17.11, an isolated npm install of the locally packed
+standalone collector, a public-registry install of the released `0.1.0` standalone
+collector, and Docker build/nonroot runtime/readiness checks with a second disposable DB.
+The reusable-library smoke checks its supported API and declarations from local
+tarballs with an offline isolated install. Private Iteration runtime/update
+verification belongs in its private repository. The server rehearsal collects
+both history and ongoing activity through the standalone collector.
+The packed contracts smoke checks native ESM imports and Node 22's `require(ESM)`
+path used by Drizzle schema loading; both resolve the same canonical module.
 Test containers/volumes are deleted afterwards. CI never publishes.
 
 The [operations guide](operations.md) covers complete PostgreSQL backups,
 isolated restoration, server replacement, administrator recovery and the actual
 shipping-container/installed-collector rehearsal (`node scripts/rehearse.mjs`).
-The initial release has no predecessor; same-version replacement is verified,
-not a claim of compatibility with a previously released vault schema.
+The container rehearsal checks fresh installation and same-version replacement;
+the database suite separately checks upgrading a published `0.1.0` archive.
+Earlier unreleased PR database builds are not a supported upgrade baseline;
+read the operations guide before upgrading.
 
 ## Releases (automatic on version tags)
 
-The intended package is `@useiteration/trace-vault-collector@0.1.0`; the intended image
-is `ghcr.io/iteration-ai/trace-vault:v0.1.0` (Linux amd64). Neither exists by virtue of
-adding these workflows. `VAULT_IMAGE` selects a release image; the default is
-`trace-vault:local`. After a verified release, use `VAULT_IMAGE` with Compose
-`pull` and `up --no-build --detach --wait` rather than rebuilding that tag.
+The next package is `@useiteration/trace-vault-collector@0.1.1`; the next image
+is `ghcr.io/iteration-ai/trace-vault:v0.1.1` (Linux amd64). These candidate versions
+are not published just by editing manifests. `VAULT_IMAGE` selects a release image;
+the default is `trace-vault:local`. Only after verifying image pull access, use
+`VAULT_IMAGE` with Compose `pull` and `up --no-build --detach --wait` rather than
+rebuilding that tag. Anonymous access to the published `v0.1.0` image remains blocked.
 
 ### One-time npm setup
 
@@ -150,12 +181,14 @@ after its first publication; public repository visibility alone does not do that
 
 ### Publish a version
 
-Update the root, collector and server versions together, then commit and push the
-reviewed changes to `main`. Push the matching `vX.Y.Z` tag. For the initial version:
+Update the root, standalone collector (`packages/vault-collector`) and server
+versions together, then commit and push the reviewed changes to `main`. Reusable
+collector/core contracts versions are independent of the standalone release. Push the
+matching `vX.Y.Z` tag. For the prepared next version:
 
 ```sh
-git tag -a v0.1.0 -m "Trace Vault v0.1.0"
-git push origin v0.1.0
+git tag -a v0.1.1 -m "Trace Vault v0.1.1"
+git push origin v0.1.1
 ```
 
 **Pushing the version tag starts publication automatically.** Branch pushes only
@@ -163,7 +196,8 @@ run verification. Preflight rejects branch dispatch, invalid tags, version/SHA
 mismatches and missing/invalid npm credentials before the full build. All builds,
 tests, secret scanning, packaged-collector checks and container rehearsals must
 pass. Checksums and image identity/revision are then rechecked before publishing
-the tested collector, container and GitHub release. Contracts are never published.
+the tested standalone collector, container and GitHub release. This public workflow
+never publishes the private `iteration-cli`, reusable library or contracts.
 There is no additional manual approval after the tag push. Restrict tag creation
 to trusted maintainers using repository rules where available, and never move or
 delete a published version tag. Container tags are versioned, not `latest`.
@@ -180,6 +214,10 @@ reuse a version with different bytes or assume that a failed job published nothi
 
 See [LICENSE](../LICENSE), [NOTICE](../NOTICE), [provenance](../OPEN-SOURCE.md),
 [security reporting](../SECURITY.md) and [contributing](../CONTRIBUTING.md).
-Only the licensed shared/vault paths were extracted from the original working
-tree; no private application source, history, credentials or production data is
-part of this repository.
+The current source tree contains the licensed shared collection/storage engine
+and standalone Vault, not Iteration's private product integration. Earlier public
+revisions included consumer-specific application code; removing it from the
+current tree does not erase that history or revoke its Apache-2.0 grants. See
+[provenance](../OPEN-SOURCE.md) for the scope of the grant. This repository is not
+a copy of Iteration's private Git history; do not commit credentials or production
+data here.

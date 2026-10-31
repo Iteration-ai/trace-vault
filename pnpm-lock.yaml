@@ -52,6 +52,13 @@ importers:
         version: 5.9.3
 
   packages/cli:
+    dependencies:
+      iteration-trace-contracts:
+        specifier: workspace:*
+        version: link:../trace-contracts
+      zod:
+        specifier: 4.6.6
+        version: 4.6.6
     devDependencies:
       '@secretlint/core':
         specifier: 13.0.6
@@ -65,18 +72,28 @@ importers:
       esbuild:
         specifier: 0.28.2
         version: 0.28.2
-      iteration-trace-contracts:
-        specifier: workspace:*
-        version: link:../trace-contracts
-      zod:
-        specifier: 4.6.6
-        version: 4.6.6
 
   packages/trace-contracts:
     dependencies:
       zod:
         specifier: 4.6.6
         version: 4.6.6
+
+  packages/trace-postgres:
+    dependencies:
+      iteration-trace-contracts:
+        specifier: workspace:*
+        version: link:../trace-contracts
+      zod:
+        specifier: 4.6.6
+        version: 4.6.6
+    devDependencies:
+      drizzle-orm:
+        specifier: 0.45.3
+        version: 0.45.3(@types/pg@8.23.1)(pg@8.23.0)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
 
   packages/vault:
     dependencies:
@@ -86,6 +103,9 @@ importers:
       iteration-trace-contracts:
         specifier: workspace:*
         version: link:../trace-contracts
+      iteration-trace-postgres:
+        specifier: workspace:*
+        version: link:../trace-postgres
       pg:
         specifier: 8.23.0
         version: 8.23.0
@@ -111,6 +131,8 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+
+  packages/vault-collector: {}
 
 packages:
 

@@ -5,6 +5,11 @@ import {
 	permitsVaultCapture,
 	type TraceEvent,
 } from "iteration-trace-contracts";
+import {
+	deleteTraceSession,
+	ingestTraceBatch,
+	prepareTraceIngestRows,
+} from "iteration-trace-postgres";
 import { Pool } from "pg";
 import * as z from "zod";
 import { hashPassword, passwordSchema } from "./password.js";
@@ -24,6 +29,15 @@ import {
 	type VaultSource,
 	VaultStoreError,
 } from "./store-contracts.js";
+import {
+	eventFields,
+	receiptJoin,
+	saveTraceReceipts,
+	sessionJoin,
+	storageBatch,
+	storageContext,
+	storageSchema,
+} from "./trace-storage.js";
 
 type Database = ReturnType<typeof drizzle>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -56,18 +70,22 @@ const invitationFields = {
 	revoked: tables.invitations.revoked,
 };
 const sessionFields = {
-	id: tables.traceSessions.id,
-	source: tables.traceSessions.source,
-	sourceSessionId: tables.traceSessions.sourceSessionId,
-	memberId: tables.traceSessions.memberId,
-	contributorId: tables.traceSessions.memberId,
+	id: tables.sessionIdentifiers.id,
+	source: tables.sessionIdentifiers.source,
+	sourceSessionId: tables.sessionIdentifiers.sourceSessionId,
+	memberId: tables.sessionIdentifiers.memberId,
+	contributorId: tables.sessionIdentifiers.memberId,
 	contributorName: tables.members.name,
 	title: sql<
 		string | null
-	>`coalesce(nullif(btrim(${tables.traceSessions.title}), ''), ${tables.traceSessions.firstUserMessage})`,
-	cwd: tables.traceSessions.cwd,
-	projectId: tables.traceSessions.projectId,
-	repository: tables.traceSessions.repository,
+	>`coalesce(${tables.traceSessions.sourceTitle}, nullif(btrim(${tables.sessionIdentifiers.title}), ''), ${tables.traceSessions.firstUserMessagePreview})`,
+	cwd: tables.traceSessions.sourceCwd,
+	projectId: tables.sessionIdentifiers.projectId,
+	repository: sql<
+		string | null
+	>`${tables.traceSessions.sourceRepositoryUrl}`.mapWith(
+		(value: string | null) => (value ? canonicalRepository(value) : null),
+	),
 	lastReceivedAt: tables.traceSessions.lastReceivedAt,
 	eventCount: tables.traceSessions.eventCount,
 };
@@ -78,81 +96,7 @@ const sessionCursorSchema = z
 const eventCursorSchema = z
 	.object({ sequence: z.number().int(), eventId: z.string(), id: uuidSchema })
 	.strict();
-const sessionMetadataSchema = z.object({
-	cwd: z.string().nullish(),
-	title: z.string().nullish(),
-	git: z.object({ repository_url: z.string().nullish() }).nullish(),
-});
 const duplicateErrorSchema = z.object({ code: z.literal("23505") });
-function userMessagePreview(payload: TraceEvent["payload"]): string | null {
-	const { text, message, content } = payload;
-	const value =
-		typeof text === "string" && text.trim()
-			? text
-			: typeof message === "string" && message.trim()
-				? message
-				: Array.isArray(content)
-					? content
-							.flatMap((block) =>
-								block !== null &&
-								typeof block === "object" &&
-								!Array.isArray(block) &&
-								(block.type === "text" || block.type === "input_text") &&
-								typeof block.text === "string"
-									? [block.text]
-									: [],
-							)
-							.join(" ")
-					: "";
-	const preview = [...value.replace(/\s+/gu, " ").trim()]
-		.slice(0, 160)
-		.join("");
-	return preview || null;
-}
-function projectSession(
-	event: TraceEvent,
-	identity: { memberId: string; source: VaultSource },
-	previous: typeof tables.traceSessions.$inferInsert | undefined,
-): typeof tables.traceSessions.$inferInsert {
-	const metadata = sessionMetadataSchema.safeParse(
-		event.eventType === "session_meta" ? event.payload : {},
-	);
-	if (!metadata.success)
-		fail("invalid_input", "Invalid session metadata fields");
-	const remote = metadata.data.git?.repository_url;
-	const preview =
-		event.eventType === "user_message"
-			? userMessagePreview(event.payload)
-			: null;
-	const earlier =
-		preview !== null &&
-		(previous?.firstUserMessageSequence == null ||
-			event.sequence < previous.firstUserMessageSequence ||
-			(event.sequence === previous.firstUserMessageSequence &&
-				Buffer.compare(
-					Buffer.from(event.eventId),
-					Buffer.from(previous.firstUserMessageEventId!),
-				) < 0));
-	return {
-		...identity,
-		sourceSessionId: event.sessionId,
-		projectId: event.projectId ?? previous?.projectId ?? null,
-		cwd: metadata.data.cwd ?? previous?.cwd ?? null,
-		title: metadata.data.title?.trim() || previous?.title || null,
-		firstUserMessage: earlier ? preview : (previous?.firstUserMessage ?? null),
-		firstUserMessageSequence: earlier
-			? event.sequence
-			: (previous?.firstUserMessageSequence ?? null),
-		firstUserMessageEventId: earlier
-			? event.eventId
-			: (previous?.firstUserMessageEventId ?? null),
-		repository: remote
-			? canonicalRepository(remote)
-			: (previous?.repository ?? null),
-		eventCount: (previous?.eventCount ?? 0) + 1,
-		lastReceivedAt: new Date(),
-	};
-}
 function cursor<T>(
 	value: string | undefined,
 	schema: z.ZodType<T>,
@@ -227,16 +171,16 @@ function admin(actor: Actor) {
 }
 function sessionScope(identity: VaultSessionIdentity) {
 	return and(
-		eq(tables.traceSessions.memberId, identity.memberId),
-		eq(tables.traceSessions.source, identity.source),
-		eq(tables.traceSessions.sourceSessionId, identity.sourceSessionId),
+		eq(tables.sessionIdentifiers.memberId, identity.memberId),
+		eq(tables.sessionIdentifiers.source, identity.source),
+		eq(tables.sessionIdentifiers.sourceSessionId, identity.sourceSessionId),
 	);
 }
 function eventScope(identity: VaultSessionIdentity) {
 	return and(
-		eq(tables.traceEvents.memberId, identity.memberId),
-		eq(tables.traceEvents.source, identity.source),
-		eq(tables.traceEvents.sourceSessionId, identity.sourceSessionId),
+		eq(tables.eventReceipts.memberId, identity.memberId),
+		eq(tables.eventReceipts.source, identity.source),
+		eq(tables.traceEvents.sessionId, identity.sourceSessionId),
 	);
 }
 
@@ -825,17 +769,7 @@ export class VaultStore {
 			];
 			if (!events.length) return { acceptedEventIds, insertedCount: 0 };
 			const source = actor.device.source;
-			const sessions = [...new Set(events.map((event) => event.sessionId))];
-			const deletedSessions = await tx
-				.select({ id: tables.sessionTombstones.sourceSessionId })
-				.from(tables.sessionTombstones)
-				.where(
-					and(
-						eq(tables.sessionTombstones.memberId, actor.id),
-						eq(tables.sessionTombstones.source, source),
-						inArray(tables.sessionTombstones.sourceSessionId, sessions),
-					),
-				);
+			const context = await storageContext(tx, actor.id, source);
 			const deletedEvents = await tx
 				.select({ id: tables.eventTombstones.eventId })
 				.from(tables.eventTombstones)
@@ -846,80 +780,32 @@ export class VaultStore {
 						inArray(tables.eventTombstones.eventId, acceptedEventIds),
 					),
 				);
-			const deletedSessionIds = new Set(deletedSessions.map((row) => row.id));
 			const deletedEventIds = new Set(deletedEvents.map((row) => row.id));
-			const uniqueEvents = new Map(
-				events.map((event) => [event.eventId, event]),
-			);
-			const eligible = [...uniqueEvents.values()].filter(
-				(event) =>
-					!deletedSessionIds.has(event.sessionId) &&
-					!deletedEventIds.has(event.eventId),
+			const eligible = prepareTraceIngestRows({ events }).events.filter(
+				(event) => !deletedEventIds.has(event.eventId),
 			);
 			if (!eligible.length) return { acceptedEventIds, insertedCount: 0 };
-			const inserted = await tx
-				.insert(tables.traceEvents)
-				.values(
-					eligible.map((event) => ({
-						memberId: actor.id,
-						source,
-						eventId: event.eventId,
-						sourceSessionId: event.sessionId,
-						sequence: event.sequence,
-						occurredAt: event.occurredAt,
-						deviceId: actor.device!.id,
-						payload: event,
-						captureAuthorization: event.capture!,
-						policyRevision: expectedPolicyRevision,
-					})),
-				)
-				.onConflictDoNothing()
-				.returning({ eventId: tables.traceEvents.eventId });
-			const insertedIds = new Set(inserted.map((row) => row.eventId));
-			const sessionRows = new Map<
-				string,
-				typeof tables.traceSessions.$inferInsert
-			>();
-			for (const event of eligible) {
-				if (!insertedIds.has(event.eventId)) continue;
-				sessionRows.set(
-					event.sessionId,
-					projectSession(
-						event,
-						{ memberId: actor.id, source },
-						sessionRows.get(event.sessionId),
-					),
-				);
-			}
-			if (sessionRows.size) {
-				const earlierUserMessage = sql`excluded.first_user_message_sequence is not null and (
-					${tables.traceSessions.firstUserMessageSequence} is null or
-					(excluded.first_user_message_sequence, excluded.first_user_message_event_id collate "C") <
-					(${tables.traceSessions.firstUserMessageSequence}, ${tables.traceSessions.firstUserMessageEventId} collate "C")
-				)`;
-				await tx
-					.insert(tables.traceSessions)
-					.values([...sessionRows.values()])
-					.onConflictDoUpdate({
-						target: [
-							tables.traceSessions.memberId,
-							tables.traceSessions.source,
-							tables.traceSessions.sourceSessionId,
-						],
-						set: {
-							projectId: sql`coalesce(excluded.project_id, ${tables.traceSessions.projectId})`,
-							cwd: sql`coalesce(excluded.cwd, ${tables.traceSessions.cwd})`,
-							title: sql`coalesce(excluded.title, ${tables.traceSessions.title})`,
-							firstUserMessage: sql`case when ${earlierUserMessage} then excluded.first_user_message else ${tables.traceSessions.firstUserMessage} end`,
-							firstUserMessageSequence: sql`case when ${earlierUserMessage} then excluded.first_user_message_sequence else ${tables.traceSessions.firstUserMessageSequence} end`,
-							firstUserMessageEventId: sql`case when ${earlierUserMessage} then excluded.first_user_message_event_id else ${tables.traceSessions.firstUserMessageEventId} end`,
-							repository: sql`coalesce(excluded.repository, ${tables.traceSessions.repository})`,
-							eventCount: sql`${tables.traceSessions.eventCount} + excluded.event_count`,
-							lastReceivedAt: sql`excluded.last_received_at`,
-						},
-					});
-			}
-			return { acceptedEventIds, insertedCount: inserted.length };
+			const changes = await ingestTraceBatch(
+				tx,
+				storageSchema,
+				context,
+				storageBatch(eligible),
+			);
+			const changedIds = new Set(
+				changes.changedEvents.map((event) => event.eventId),
+			);
+			await saveTraceReceipts(
+				tx,
+				context,
+				actor.device.id,
+				expectedPolicyRevision,
+				eligible.filter((event) => changedIds.has(event.eventId)),
+			);
+			return {
+				acceptedEventIds,
+				insertedCount: changes.changedEvents.filter((event) => event.inserted)
+					.length,
+			};
 		});
 	}
 
@@ -929,35 +815,41 @@ export class VaultStore {
 		return this.authorized(caller, false, async (tx, actor) => {
 			human(actor);
 			const rows = await tx
-				.select(sessionFields)
-				.from(tables.traceSessions)
+				.select({
+					...sessionFields,
+					cursorAt: sql<string>`to_char(${tables.traceSessions.lastReceivedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+				})
+				.from(tables.sessionIdentifiers)
+				.innerJoin(tables.traceSessions, sessionJoin)
 				.innerJoin(
 					tables.members,
-					eq(tables.members.id, tables.traceSessions.memberId),
+					eq(tables.members.id, tables.sessionIdentifiers.memberId),
 				)
 				.where(
 					and(
 						actor.role === "admin"
 							? undefined
-							: eq(tables.traceSessions.memberId, actor.id),
+							: eq(tables.sessionIdentifiers.memberId, actor.id),
 						after
-							? sql`(${tables.traceSessions.lastReceivedAt}, ${tables.traceSessions.id}) < (${new Date(after.at)}, ${after.id}::uuid)`
+							? sql`(${tables.traceSessions.lastReceivedAt}, ${tables.sessionIdentifiers.id}) < (${after.at}::timestamptz, ${after.id}::uuid)`
 							: undefined,
 					),
 				)
 				.orderBy(
 					desc(tables.traceSessions.lastReceivedAt),
-					desc(tables.traceSessions.id),
+					desc(tables.sessionIdentifiers.id),
 				)
 				.limit(limit + 1);
-			const items = rows.slice(0, limit);
-			const last = items.at(-1);
+			const items = rows
+				.slice(0, limit)
+				.map(({ cursorAt: _cursorAt, ...row }) => row);
+			const last = rows[Math.min(rows.length, limit) - 1];
 			return {
 				items,
 				nextCursor:
 					rows.length > limit && last
 						? encodeCursor({
-								at: last.lastReceivedAt.toISOString(),
+								at: last.cursorAt,
 								id: last.id,
 							})
 						: null,
@@ -971,10 +863,11 @@ export class VaultStore {
 			own(actor, identity.memberId);
 			const [session] = await tx
 				.select(sessionFields)
-				.from(tables.traceSessions)
+				.from(tables.sessionIdentifiers)
+				.innerJoin(tables.traceSessions, sessionJoin)
 				.innerJoin(
 					tables.members,
-					eq(tables.members.id, tables.traceSessions.memberId),
+					eq(tables.members.id, tables.sessionIdentifiers.memberId),
 				)
 				.where(sessionScope(identity));
 			if (!session) fail("not_found", "Session not found");
@@ -987,17 +880,18 @@ export class VaultStore {
 			human(actor);
 			const [session] = await tx
 				.select(sessionFields)
-				.from(tables.traceSessions)
+				.from(tables.sessionIdentifiers)
+				.innerJoin(tables.traceSessions, sessionJoin)
 				.innerJoin(
 					tables.members,
-					eq(tables.members.id, tables.traceSessions.memberId),
+					eq(tables.members.id, tables.sessionIdentifiers.memberId),
 				)
 				.where(
 					and(
-						eq(tables.traceSessions.id, sessionId),
+						eq(tables.sessionIdentifiers.id, sessionId),
 						actor.role === "admin"
 							? undefined
-							: eq(tables.traceSessions.memberId, actor.id),
+							: eq(tables.sessionIdentifiers.memberId, actor.id),
 					),
 				);
 			if (!session) fail("not_found", "Session not found");
@@ -1016,24 +910,25 @@ export class VaultStore {
 			human(actor);
 			if (identity) own(actor, identity.memberId);
 			const rows = await tx
-				.select()
-				.from(tables.traceEvents)
+				.select(eventFields)
+				.from(tables.eventReceipts)
+				.innerJoin(tables.traceEvents, receiptJoin)
 				.where(
 					and(
 						identity
 							? eventScope(identity)
 							: actor.role === "admin"
 								? undefined
-								: eq(tables.traceEvents.memberId, actor.id),
+								: eq(tables.eventReceipts.memberId, actor.id),
 						after
-							? sql`(${tables.traceEvents.sequence}, ${tables.traceEvents.eventId}, ${tables.traceEvents.id}) > (${after.sequence}, ${after.eventId}, ${after.id}::uuid)`
+							? sql`(${tables.traceEvents.sequence}, ${tables.traceEvents.eventId}, ${tables.eventReceipts.id}) > (${after.sequence}, ${after.eventId}, ${after.id}::uuid)`
 							: undefined,
 					),
 				)
 				.orderBy(
 					asc(tables.traceEvents.sequence),
 					asc(tables.traceEvents.eventId),
-					asc(tables.traceEvents.id),
+					asc(tables.eventReceipts.id),
 				)
 				.limit(limit + 1);
 			const items = rows.slice(0, limit);
@@ -1059,26 +954,38 @@ export class VaultStore {
 		return this.authorized(caller, true, async (tx, actor) => {
 			human(actor);
 			own(actor, identity.memberId);
-			await tx
-				.insert(tables.sessionTombstones)
-				.values(identity)
-				.onConflictDoNothing();
-			await tx
-				.insert(tables.eventTombstones)
-				.select(
-					tx
-						.select({
-							memberId: tables.traceEvents.memberId,
-							source: tables.traceEvents.source,
-							eventId: tables.traceEvents.eventId,
-							createdAt: sql<Date>`now()`.as("created_at"),
-						})
-						.from(tables.traceEvents)
-						.where(eventScope(identity)),
-				)
-				.onConflictDoNothing();
-			await tx.delete(tables.traceEvents).where(eventScope(identity));
-			await tx.delete(tables.traceSessions).where(sessionScope(identity));
+			const context = await storageContext(
+				tx,
+				identity.memberId,
+				identity.source,
+			);
+			await deleteTraceSession(
+				tx,
+				storageSchema,
+				context,
+				identity.sourceSessionId,
+				async (transaction) => {
+					await transaction
+						.insert(tables.eventTombstones)
+						.select(
+							transaction
+								.select({
+									memberId: tables.eventReceipts.memberId,
+									source: tables.eventReceipts.source,
+									eventId: tables.eventReceipts.eventId,
+									createdAt: sql<Date>`now()`.as("created_at"),
+								})
+								.from(tables.eventReceipts)
+								.innerJoin(tables.traceEvents, receiptJoin)
+								.where(eventScope(identity)),
+						)
+						.onConflictDoNothing();
+					await transaction
+						.delete(tables.sessionIdentifiers)
+						.where(sessionScope(identity));
+				},
+				{ tombstoneMissing: true },
+			);
 			await this.audit(
 				tx,
 				actor.id,

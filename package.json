@@ -1,6 +1,6 @@
 {
 	"name": "trace-vault-workspace",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"private": true,
 	"type": "module",
 	"license": "Apache-2.0",
@@ -10,11 +10,17 @@
 	},
 	"packageManager": "pnpm@10.20.0",
 	"scripts": {
-		"build": "pnpm --filter iteration-trace-contracts build && pnpm --filter @useiteration/trace-vault-collector build && pnpm --filter trace-vault build",
-		"typecheck": "tsc --noEmit && pnpm --filter iteration-trace-contracts exec tsc --noEmit && pnpm --filter @useiteration/trace-vault-collector exec tsc --noEmit && pnpm --filter trace-vault exec tsc --noEmit",
-		"test": "node --import=tsx --test packages/trace-contracts/src/*.test.ts packages/cli/src/*.test.ts packages/vault/src/*.test.ts",
-		"pack:collector": "node scripts/pack-collector.mjs",
+		"boundaries:check": "node scripts/check-boundaries.mjs",
+		"build": "pnpm boundaries:check && pnpm --filter iteration-trace-contracts build && pnpm --filter iteration-trace-postgres build && pnpm --filter iteration-trace-collector build && pnpm --filter @useiteration/trace-vault-collector build && pnpm --filter trace-vault build",
+		"typecheck": "tsc --noEmit && pnpm --filter iteration-trace-contracts exec tsc --noEmit && pnpm --filter iteration-trace-postgres exec tsc --noEmit && pnpm --filter iteration-trace-collector exec tsc --noEmit && pnpm --filter trace-vault exec tsc --noEmit",
+		"test": "node --import=tsx --test test/*.test.mjs packages/*/src/*.test.ts",
+		"pack:collector": "node scripts/pack.mjs vault-collector",
 		"smoke:collector": "node scripts/smoke-collector.mjs",
+		"smoke:published": "node scripts/smoke-collector.mjs 0.1.0",
+		"pack:collector-core": "node scripts/pack.mjs cli",
+		"smoke:collector-core": "node scripts/smoke-cli.mjs",
+		"pack:contracts": "node scripts/pack.mjs trace-contracts",
+		"smoke:contracts": "node scripts/smoke-contracts.mjs",
 		"start": "pnpm --filter trace-vault start"
 	},
 	"dependencies": {

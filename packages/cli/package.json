@@ -1,5 +1,5 @@
 {
-	"name": "@useiteration/trace-vault-collector",
+	"name": "iteration-trace-collector",
 	"version": "0.1.0",
 	"type": "module",
 	"license": "Apache-2.0",
@@ -9,28 +9,33 @@
 		"directory": "packages/cli"
 	},
 	"engines": {
-		"node": ">=22"
+		"node": ">=22.22.0"
 	},
 	"files": [
 		"dist",
 		"LICENSE",
 		"NOTICE"
 	],
-	"bin": {
-		"trace-vault": "./dist/vault-cli.js"
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
 	},
 	"publishConfig": {
 		"access": "public"
 	},
 	"scripts": {
-		"build": "tsc -p tsconfig.json --noEmit && node build.mjs"
+		"build": "pnpm --filter iteration-trace-contracts build && tsc -p tsconfig.json --noEmit && node build.mjs && tsc -p tsconfig.build.json"
+	},
+	"dependencies": {
+		"iteration-trace-contracts": "workspace:*",
+		"zod": "4.6.6"
 	},
 	"devDependencies": {
 		"@secretlint/core": "13.0.6",
 		"@secretlint/profiler": "13.0.6",
 		"@secretlint/secretlint-rule-preset-recommend": "13.0.6",
-		"esbuild": "0.28.2",
-		"iteration-trace-contracts": "workspace:*",
-		"zod": "4.6.6"
+		"esbuild": "0.28.2"
 	}
 }

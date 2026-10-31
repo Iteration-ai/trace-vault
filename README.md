@@ -42,3 +42,12 @@ bootstrap token, then [connect a collector](docs/setup.md#build-the-collector).
 [Full setup & capture limitations](docs/setup.md) · [Backups & recovery](docs/operations.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 Built by [Iteration](https://github.com/Iteration-ai). [Apache-2.0](LICENSE).
+
+## Reusable trace machinery
+
+The [collector library](packages/cli/README.md), trace contracts and PostgreSQL
+storage engine are reusable independently of this server. The
+[standalone collector](packages/vault-collector/README.md) uses that same
+collection implementation and connects directly to your vault. Applications can
+use the library or the vault's authenticated HTTP API without adding their own
+login provider, account model or analysis code to this repository.

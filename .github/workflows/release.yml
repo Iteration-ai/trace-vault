@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag (v0.1.0); select the same tag as the workflow ref
+        description: Existing release tag (v0.1.1); select the same tag as the workflow ref
         type: string
         required: true
 
@@ -87,7 +87,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          VERSION="$(node -p 'require("./packages/cli/package.json").version')"
+          VERSION="$(node -p 'require("./packages/vault-collector/package.json").version')"
           npm publish "./artifacts/useiteration-trace-vault-collector-${VERSION}.tgz" --access public --provenance
       - name: Publish the tested server image using GITHUB_TOKEN
         env:

@@ -1,8 +1,11 @@
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { installTraceProjections } from "iteration-trace-postgres/migrate";
 import { Pool } from "pg";
 import * as z from "zod";
+import { storageSchema } from "./trace-storage.js";
+import { upgradeVaultStorage } from "./upgrade-storage.js";
 
 export async function migrateVault(
 	databaseUrl: string,
@@ -35,6 +38,13 @@ export async function migrateVault(
 					migrationsFolder: migrationsDirectory,
 					migrationsSchema: "vault_migrations",
 				});
+				const { rows } = await client.query(
+					"SELECT to_regclass('vault.storage_upgrade') IS NOT NULL AS canonical",
+				);
+				if (rows[0]?.canonical) {
+					await installTraceProjections(client, storageSchema);
+					await upgradeVaultStorage(client);
+				}
 			} finally {
 				await database.execute(sql`select pg_advisory_unlock(186004595, 1)`);
 			}

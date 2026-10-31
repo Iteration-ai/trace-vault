@@ -1,13 +1,12 @@
 import type { ReactNode } from "react";
 
-export const panelPaddings = ["none", "sm", "md"] as const;
-export type PanelPadding = (typeof panelPaddings)[number];
+export type PanelPadding = keyof typeof panelPaddingClasses;
 
 const panelPaddingClasses = {
 	none: "rounded-lg border border-line bg-surface",
 	sm: "rounded-lg border border-line bg-surface p-4",
 	md: "rounded-lg border border-line bg-surface p-5 sm:p-6",
-} as const satisfies Record<PanelPadding, string>;
+} as const;
 
 export const popoverClasses = {
 	menu: "rounded-lg border border-line-strong bg-overlay p-1 shadow-md",

@@ -27,6 +27,12 @@ export async function runWindowsPowerShell(
 	operation: string,
 	script: string,
 ): Promise<string> {
+	// A PowerShell 7 parent passes incompatible module paths through Node.
+	// Let Windows PowerShell 5.1 reconstruct its own defaults at startup.
+	const env = { ...process.env };
+	for (const name of Object.keys(env)) {
+		if (name.toLowerCase() === "psmodulepath") delete env[name];
+	}
 	try {
 		const { stdout } = await execFile(
 			windowsPowerShellPath(),
@@ -40,6 +46,7 @@ export async function runWindowsPowerShell(
 				),
 			],
 			{
+				env,
 				timeout: 30_000,
 				maxBuffer: 1024 * 1024,
 				windowsHide: true,

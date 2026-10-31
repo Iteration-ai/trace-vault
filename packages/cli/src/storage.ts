@@ -1,5 +1,4 @@
 import { createReadStream, createWriteStream, promises as fs } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import {
@@ -187,10 +186,6 @@ function parseOutboxEvent(line: string): TraceEvent {
 	return event;
 }
 
-export function defaultCollectorDirectory(source: CollectorSource): string {
-	return path.join(os.homedir(), ".config", "iteration", `${source}-collector`);
-}
-
 export function validateCollectorEndpoint(endpoint: string): URL {
 	let parsed: URL;
 	try {
@@ -223,9 +218,7 @@ export function validateCollectorEndpoint(endpoint: string): URL {
 	return parsed;
 }
 
-export function collectorPaths(
-	directory = defaultCollectorDirectory("codex"),
-): CollectorPaths {
+export function collectorPaths(directory: string): CollectorPaths {
 	return {
 		config: path.join(directory, "config.json"),
 		state: path.join(directory, "state.json"),
@@ -252,7 +245,7 @@ export async function assertFreshCollectorDirectory(
 		});
 	if (configExists) {
 		throw new Error(
-			`This collector data directory is already configured. Run trace-vault status ${source} with the same --vault and --data-directory, or choose a different --data-directory for another vault.`,
+			`This collector data directory is already configured for ${source}. Use your collector's status command with the same connection and --data-directory, or choose a different --data-directory for another workspace or vault.`,
 		);
 	}
 	if (state.initialized || (await outboxSize(paths)) > 0) {
@@ -624,7 +617,7 @@ export async function initializeState(
 	if (state.initialized && state.sourceDirectory === sourceDirectory) {
 		if (includeHistory) {
 			throw new Error(
-				`${source} is already connected. Run iteration import-history ${source} to import existing sessions.`,
+				`${source} is already connected. Import existing sessions explicitly instead of reconnecting.`,
 			);
 		}
 		return;
