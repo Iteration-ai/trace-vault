@@ -59,10 +59,10 @@ pnpm build
 pnpm typecheck
 pnpm pack:collector
 pnpm smoke:collector
-pnpm pack:cli
-pnpm smoke:cli
 pnpm pack:contracts
 pnpm smoke:contracts
+pnpm pack:collector-core
+pnpm smoke:collector-core
 pnpm smoke:published
 npm install --global ./artifacts/useiteration-trace-vault-collector-0.1.1.tgz --ignore-scripts
 trace-vault --help
@@ -71,15 +71,15 @@ trace-vault --help
 The collector tarball is self-contained, with no runtime npm dependencies or
 install scripts. Its only executable is `trace-vault`; it does not install or
 depend on `iteration-cli`. Its packaging lives in `packages/vault-collector`,
-and its build consumes `packages/cli/src/vault-cli.ts` directly. The complete
-`iteration-cli` (currently `0.14.4`) lives in `packages/cli`; its four bundles
-preserve Iteration background services, Cursor hooks, self-update and rollback.
-`iteration-trace-contracts` (`0.12.0`) remains the canonical shared contracts
-package, bundled into both collectors rather than a required runtime install.
-Iteration's publisher owns CLI/contracts npm releases from the same pinned source;
-the public Trace Vault release does not publish either package. See the
-[CLI guide](../packages/cli/README.md). Do not globally install both collector
-packages together: each provides the `trace-vault` executable.
+and its build consumes `packages/cli/src/vault-cli.ts` directly. The historical
+`packages/cli` directory now contains only `iteration-trace-collector`, the
+[reusable collection API](../packages/cli/README.md), and the native vault
+entrypoint. Public `iteration-trace-contracts` owns only event/source/capture
+contracts. The private Iteration repository owns its product CLI, authentication,
+enrollment, billing/friction integrations, launcher, services and updater; no
+Iteration source checkout, account, default endpoint or runtime is needed here.
+The standalone executable bundles its public dependencies; the reusable API
+declares the public type dependencies needed by library consumers.
 
 Run on each developer's machine, using the actual server origin:
 
@@ -129,13 +129,13 @@ VAULT_TEST_DATABASE_URL=postgresql://vault_test:vault_test@127.0.0.1:5432/vault_
 ```
 
 CI performs frozen install, build, all workspace/shared types, tests against
-disposable pinned PostgreSQL 17.11, isolated npm installs of both locally packed
-CLI packages, a public-registry install of the released `0.1.0` standalone
+disposable pinned PostgreSQL 17.11, an isolated npm install of the locally packed
+standalone collector, a public-registry install of the released `0.1.0` standalone
 collector, and Docker build/nonroot runtime/readiness checks with a second disposable DB.
-The CLI smoke checks both executables, installed version lookup, managed-runtime
-adoption/repair, launcher dispatch, a real Cursor hook capture and failed-trial
-rollback. The server rehearsal collects history through the standalone package
-and ongoing activity through `iteration-cli`'s `trace-vault` executable.
+The reusable-library smoke checks its supported API and declarations from local
+tarballs with an offline isolated install. Private Iteration runtime/update
+verification belongs in its private repository. The server rehearsal collects
+both history and ongoing activity through the standalone collector.
 The packed contracts smoke checks native ESM imports and Node 22's `require(ESM)`
 path used by Drizzle schema loading; both resolve the same canonical module.
 Test containers/volumes are deleted afterwards. CI never publishes.
@@ -143,8 +143,10 @@ Test containers/volumes are deleted afterwards. CI never publishes.
 The [operations guide](operations.md) covers complete PostgreSQL backups,
 isolated restoration, server replacement, administrator recovery and the actual
 shipping-container/installed-collector rehearsal (`node scripts/rehearse.mjs`).
-The initial release has no predecessor; same-version replacement is verified,
-not a claim of compatibility with a previously released vault schema.
+The container rehearsal checks fresh installation and same-version replacement;
+the database suite separately checks upgrading a published `0.1.0` archive.
+Earlier unreleased PR database builds are not a supported upgrade baseline;
+read the operations guide before upgrading.
 
 ## Releases (automatic on version tags)
 
@@ -180,8 +182,8 @@ after its first publication; public repository visibility alone does not do that
 ### Publish a version
 
 Update the root, standalone collector (`packages/vault-collector`) and server
-versions together, then commit and push the reviewed changes to `main`. CLI and
-contracts versions are independent and owned by Iteration's publisher. Push the
+versions together, then commit and push the reviewed changes to `main`. Reusable
+collector/core contracts versions are independent of the standalone release. Push the
 matching `vX.Y.Z` tag. For the prepared next version:
 
 ```sh
@@ -195,8 +197,7 @@ mismatches and missing/invalid npm credentials before the full build. All builds
 tests, secret scanning, packaged-collector checks and container rehearsals must
 pass. Checksums and image identity/revision are then rechecked before publishing
 the tested standalone collector, container and GitHub release. This public workflow
-never publishes `iteration-cli` or contracts; Iteration's publisher remains their
-only publisher, using this repository's pinned canonical source.
+never publishes the private `iteration-cli`, reusable library or contracts.
 There is no additional manual approval after the tag push. Restrict tag creation
 to trusted maintainers using repository rules where available, and never move or
 delete a published version tag. Container tags are versioned, not `latest`.

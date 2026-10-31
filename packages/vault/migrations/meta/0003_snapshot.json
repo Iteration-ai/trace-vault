@@ -1089,44 +1089,14 @@
           "primaryKey": false,
           "notNull": false
         },
-        "billing_kind": {
-          "name": "billing_kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "billing_paid_usd": {
-          "name": "billing_paid_usd",
-          "type": "numeric(12, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "pull_request_url": {
           "name": "pull_request_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "tool_activity": {
-          "name": "tool_activity",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "tool_failed": {
           "name": "tool_failed",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "usage_activity": {
-          "name": "usage_activity",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "usage_after_error": {
-          "name": "usage_after_error",
           "type": "boolean",
           "primaryKey": false,
           "notNull": false
@@ -1429,106 +1399,6 @@
             },
             {
               "expression": "usage_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"vault_traces\".\"trace_events\".\"usage_at\" IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "trace_events_usage_workspace": {
-          "name": "trace_events_usage_workspace",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "usage_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "device_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "session_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "model",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "usage_input_tokens",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "usage_cache_read_tokens",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "usage_cache_write_tokens",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "usage_cache_write_long_tokens",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "usage_output_tokens",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "usage_activity",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "usage_after_error",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "billing_kind",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "billing_paid_usd",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1864,22 +1734,6 @@
         "trace_events_type": {
           "name": "trace_events_type",
           "value": "\"vault_traces\".\"trace_events\".\"event_type\" IN ('user_message', 'assistant_message', 'tool_call', 'tool_result', 'session_meta', 'task_started', 'turn_context', 'compacted', 'token_usage_record', 'token_count', 'world_state', 'retained_context', 'security_risk_score', 'reasoning', 'agent_reasoning', 'agent_reasoning_raw_content', 'todo_list', 'compaction', 'context_compaction', 'configuration_update', 'additional_tools', 'task_complete', 'turn_complete', 'thread_goal_updated', 'thread_rolled_back', 'turn_aborted', 'thread_settings_applied', 'source_record')"
-        },
-        "trace_events_tool_activity": {
-          "name": "trace_events_tool_activity",
-          "value": "\"vault_traces\".\"trace_events\".\"tool_activity\" IN ('exploring', 'running', 'editing', 'delegating')"
-        },
-        "trace_events_usage_activity": {
-          "name": "trace_events_usage_activity",
-          "value": "\"vault_traces\".\"trace_events\".\"usage_activity\" IN ('exploring', 'running', 'editing', 'delegating', 'answering')"
-        },
-        "trace_events_billing_kind": {
-          "name": "trace_events_billing_kind",
-          "value": "\"vault_traces\".\"trace_events\".\"billing_kind\" IN ('included', 'paid', 'byok', 'not_charged', 'mixed')"
-        },
-        "trace_events_billing_paid_usd": {
-          "name": "trace_events_billing_paid_usd",
-          "value": "\"vault_traces\".\"trace_events\".\"billing_paid_usd\" IS NULL OR (\"vault_traces\".\"trace_events\".\"billing_paid_usd\" >= 0 AND \"vault_traces\".\"trace_events\".\"billing_kind\" IN ('paid', 'mixed'))"
         }
       },
       "isRLSEnabled": false
@@ -1979,36 +1833,6 @@
         "parent_thread_id": {
           "name": "parent_thread_id",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "codex_billing_status": {
-          "name": "codex_billing_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "codex_billing_source": {
-          "name": "codex_billing_source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "codex_billing_credits": {
-          "name": "codex_billing_credits",
-          "type": "numeric",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "codex_billing_account": {
-          "name": "codex_billing_account",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "codex_billing_checked_at": {
-          "name": "codex_billing_checked_at",
-          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
@@ -2368,14 +2192,6 @@
         "trace_sessions_event_count_positive": {
           "name": "trace_sessions_event_count_positive",
           "value": "\"vault_traces\".\"trace_sessions\".\"event_count\" > 0"
-        },
-        "trace_sessions_codex_billing_status": {
-          "name": "trace_sessions_codex_billing_status",
-          "value": "\"vault_traces\".\"trace_sessions\".\"codex_billing_status\" IN ('available', 'partial', 'unavailable')"
-        },
-        "trace_sessions_codex_billing_credits": {
-          "name": "trace_sessions_codex_billing_credits",
-          "value": "\"vault_traces\".\"trace_sessions\".\"codex_billing_credits\" IS NULL OR \"vault_traces\".\"trace_sessions\".\"codex_billing_status\" = 'available'"
         },
         "trace_sessions_session_id_length": {
           "name": "trace_sessions_session_id_length",

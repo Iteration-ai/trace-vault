@@ -189,62 +189,6 @@ try {
 		(await run(cli, ["--help"], { cwd: scratch })).toString(),
 		/Repository and location capture/,
 	);
-	await run("pnpm", [
-		"--filter",
-		"iteration-cli",
-		"pack",
-		"--pack-destination",
-		scratch,
-	]);
-	const cliManifest = JSON.parse(
-		await readFile(path.join(workspace, "packages/cli/package.json"), "utf8"),
-	);
-	const iterationInstall = path.join(scratch, "iteration-installed");
-	await run("npm", [
-		"install",
-		"--prefix",
-		iterationInstall,
-		"--ignore-scripts",
-		"--no-audit",
-		"--no-fund",
-		path.join(scratch, `iteration-cli-${cliManifest.version}.tgz`),
-	]);
-	const iteration = path.join(
-		iterationInstall,
-		"node_modules",
-		".bin",
-		"iteration",
-	);
-	const iterationVault = path.join(
-		iterationInstall,
-		"node_modules",
-		".bin",
-		"trace-vault",
-	);
-	const iterationHome = path.join(scratch, "iteration-home");
-	await mkdir(iterationHome);
-	const isolatedIteration = {
-		cwd: scratch,
-		env: {
-			...composeEnvironment,
-			HOME: iterationHome,
-			USERPROFILE: iterationHome,
-			NODE_PATH: "",
-			NODE_OPTIONS: "",
-		},
-	};
-	assert.match(
-		(await run(iteration, ["--help"], isolatedIteration)).toString(),
-		/Iteration CLI/,
-	);
-	assert.equal(
-		(await run(iteration, ["version"], isolatedIteration)).toString().trim(),
-		cliManifest.version,
-	);
-	assert.match(
-		(await run(iterationVault, ["--help"], isolatedIteration)).toString(),
-		/Repository and location capture/,
-	);
 	await compose(primary, "up", "--detach", "--wait");
 	assert.equal((await json(primary, "/api/status")).initialized, false);
 	const owner = await json(primary, "/api/setup", null, {
@@ -417,7 +361,7 @@ try {
 		filename,
 		`${JSON.stringify(record(scope, "new ongoing work", "ongoing"))}\n`,
 	);
-	await collect(iterationVault);
+	await collect();
 	const expectedExport = await exportText();
 	assert.match(expectedExport, /new ongoing work/);
 	await collect();
@@ -458,7 +402,7 @@ try {
 	);
 	assert.equal(migrationCount, String(migrationJournal.entries.length));
 	process.stdout.write(
-		`PASS ongoing collection through iteration-cli's trace-vault entrypoint, idempotent retries through standalone collector, restart + current-version replacement (${migrationCount} vault migrations retained)\n`,
+		`PASS ongoing collection and idempotent retries through standalone collector, restart + current-version replacement (${migrationCount} vault migrations retained)\n`,
 	);
 
 	const deletedEvents = expectedExport

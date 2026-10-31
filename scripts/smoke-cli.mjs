@@ -1,204 +1,162 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
-import {
-	cp,
-	mkdir,
-	mkdtemp,
-	readFile,
-	readdir,
-	rm,
-	writeFile,
-} from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 const { version } = JSON.parse(
 	await readFile("packages/cli/package.json", "utf8"),
 );
-const tarball = path.resolve(`artifacts/iteration-cli-${version}.tgz`);
-const directory = await mkdtemp(path.join(os.tmpdir(), "iteration-pack-"));
+const contracts = JSON.parse(
+	await readFile("packages/trace-contracts/package.json", "utf8"),
+);
+const directory = await mkdtemp(
+	path.join(os.tmpdir(), "trace-collector-pack-"),
+);
 try {
+	// Pack the pinned local type dependency too, so this check needs no registry.
+	const zodRoot = await realpath("packages/cli/node_modules/zod");
+	const [zodTarball] = JSON.parse(
+		execFileSync("npm", ["pack", "--json", "--pack-destination", directory], {
+			cwd: zodRoot,
+			encoding: "utf8",
+		}),
+	);
 	execFileSync(
 		"npm",
 		[
 			"install",
 			"--prefix",
 			directory,
+			"--offline",
 			"--ignore-scripts",
 			"--no-audit",
 			"--no-fund",
-			tarball,
+			path.join(directory, zodTarball.filename),
+			path.resolve(
+				`artifacts/iteration-trace-contracts-${contracts.version}.tgz`,
+			),
+			path.resolve(`artifacts/iteration-trace-collector-${version}.tgz`),
 		],
-		{
-			cwd: directory,
-			stdio: "inherit",
-		},
+		{ cwd: directory, stdio: "inherit" },
 	);
-	const root = path.join(directory, "node_modules", "iteration-cli");
+	const root = path.join(
+		directory,
+		"node_modules",
+		"iteration-trace-collector",
+	);
 	const manifest = JSON.parse(
 		await readFile(path.join(root, "package.json"), "utf8"),
 	);
-	assert.equal(manifest.name, "iteration-cli");
+	assert.equal(manifest.name, "iteration-trace-collector");
 	assert.equal(manifest.version, version);
-	assert.deepEqual(manifest.bin, {
-		iteration: "./dist/cli.js",
-		"trace-vault": "./dist/vault-cli.js",
+	assert.equal(manifest.bin, undefined);
+	assert.deepEqual(Object.keys(manifest.exports), ["."]);
+	const bundle = await readFile(path.join(root, "dist/index.js"), "utf8");
+	assert.doesNotMatch(
+		bundle,
+		/useiteration\.com|clerk-device-auth|collector-auth\/expand|collector-progress|friction-summary|codex-billing|cursor-billing|ITERATION_RUNTIME_VERSION/,
+	);
+	const consumer = path.join(directory, "consumer.mjs");
+	await writeFile(
+		consumer,
+		`
+import assert from "node:assert/strict";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import {
+  acquireCollectorLock, collectorPaths, collectorTick, initializeState,
+  loadConfig, saveConfig, configureCollectorLogging, createLogger
+} from "iteration-trace-collector";
+await assert.rejects(import("iteration-trace-collector/dist/storage.js"), { code: "ERR_PACKAGE_PATH_NOT_EXPORTED" });
+const home = path.resolve("claude");
+const dataDirectory = path.resolve("data");
+await mkdir(path.join(home, "projects", "fixture"), { recursive: true });
+await writeFile(path.join(home, "projects", "fixture", "11111111-2222-4333-8444-555555555555.jsonl"), JSON.stringify({
+  type: "user", sessionId: "11111111-2222-4333-8444-555555555555",
+  uuid: "packaged-record", timestamp: "2026-10-30T12:00:00Z",
+  message: { role: "user", content: "synthetic package API smoke" }
+}) + "\\n");
+const paths = collectorPaths(dataDirectory);
+const config = { source: "claude", claudeHome: home, dataDirectory,
+  endpoint: "http://localhost/api/traces/ingest", token: "s".repeat(43) };
+await saveConfig(config, paths);
+assert.deepEqual(await loadConfig(paths), config);
+await initializeState("claude", home, paths, true);
+const release = await acquireCollectorLock(paths);
+await assert.rejects(acquireCollectorLock(paths), /already running/);
+let uploaded = [];
+const tick = await collectorTick(config, paths, async (_url, request) => {
+  uploaded.push(...JSON.parse(request.body).events);
+  return Response.json({ deviceId: "22222222-2222-4333-8444-555555555555", acceptedEventIds: uploaded.map(event => event.eventId) }, { status: 202 });
+});
+assert.equal(tick.uploaded, 1);
+assert.equal(tick.outboxBytes, 0);
+assert.match(JSON.stringify(uploaded), /synthetic package API smoke/);
+await release();
+const releaseAgain = await acquireCollectorLock(paths);
+await releaseAgain();
+let line;
+configureCollectorLogging(() => ({ runtimeVersion: "consumer-version" }));
+createLogger({ component: "consumer" }, value => { line = value; })({ level: "info", operation: "smoke" });
+assert.equal(JSON.parse(line).runtimeVersion, "consumer-version");
+console.log("Installed collector API: config, history scan, redaction/upload, outbox acknowledgement, locking and logging passed.");
+`,
+	);
+	const env = { ...process.env, NODE_PATH: "", NODE_OPTIONS: "" };
+	execFileSync(process.execPath, [consumer], {
+		cwd: directory,
+		env,
+		stdio: "inherit",
+		timeout: 30_000,
 	});
-	for (const field of [
-		"dependencies",
-		"optionalDependencies",
-		"peerDependencies",
-	])
-		assert.equal(Object.keys(manifest[field] ?? {}).length, 0);
-	assert.deepEqual((await readdir(path.join(root, "dist"))).sort(), [
-		"LICENSE",
-		"NOTICE",
-		"OPEN-SOURCE.md",
-		"THIRD-PARTY-NOTICES.txt",
-		"cli.js",
-		"cursor-hook-entry.js",
-		"launcher.js",
-		"vault-cli.js",
-	]);
-	const home = path.join(directory, "home");
-	await mkdir(home);
-	const env = {
-		...process.env,
-		HOME: home,
-		USERPROFILE: home,
-		NODE_PATH: "",
-		NODE_OPTIONS: "",
-	};
-	const run = (file, args, input) =>
-		execFileSync(file, args, {
+	execFileSync(
+		process.execPath,
+		[
+			"--input-type=commonjs",
+			"-e",
+			`
+const assert = require("node:assert/strict");
+const collector = require("iteration-trace-collector");
+assert.equal(typeof collector.collectorTick, "function");
+assert.equal(typeof collector.acquireCollectorLock, "function");
+assert.equal(collector.authenticateAndEnrollCollector, undefined);
+assert.equal(collector.updateRuntime, undefined);
+`,
+		],
+		{ cwd: directory, env, stdio: "inherit", timeout: 30_000 },
+	);
+	await writeFile(
+		path.join(directory, "consumer.mts"),
+		`
+import { collectorPaths, collectorTick, type CollectorConfig, type CollectorFetcher } from "iteration-trace-collector";
+const config: CollectorConfig = { codexHome: "/synthetic", dataDirectory: "/synthetic/data", endpoint: "https://example.test/api/traces/ingest", token: "fixture" };
+const request: CollectorFetcher = async () => Response.json({ accepted: 0 }, { status: 202 });
+void collectorTick(config, collectorPaths(config.dataDirectory), request);
+`,
+	);
+	execFileSync(
+		process.execPath,
+		[
+			path.resolve("node_modules/typescript/bin/tsc"),
+			"--noEmit",
+			"--strict",
+			"--skipLibCheck",
+			"--module",
+			"NodeNext",
+			"--target",
+			"ES2022",
+			"consumer.mts",
+		],
+		{
 			cwd: directory,
 			env,
-			encoding: "utf8",
-			input,
+			stdio: "inherit",
 			timeout: 30_000,
-		});
-	const iteration = path.join(directory, "node_modules", ".bin", "iteration");
-	const vault = path.join(directory, "node_modules", ".bin", "trace-vault");
-	assert.match(run(iteration, ["--help"]), /Iteration CLI/);
-	assert.match(run(iteration, ["connect", "--help"]), /--workspace ID/);
-	assert.equal(run(iteration, ["version"]).trim(), version);
-	assert.equal(run(iteration, ["self-check"]).trim(), version);
-	assert.match(run(iteration, ["update", "off"]), /Automatic updates are off/);
-	const settingsFile = path.join(
-		home,
-		".config",
-		"iteration",
-		"runtime",
-		"settings.json",
+		},
 	);
-	assert.equal(
-		JSON.parse(await readFile(settingsFile, "utf8")).autoUpdate,
-		false,
-	);
-	assert.match(run(iteration, ["update", "on"]), /Automatic updates are on/);
-	assert.equal(
-		JSON.parse(await readFile(settingsFile, "utf8")).autoUpdate,
-		true,
-	);
-	assert.match(run(vault, ["--help"]), /trace-vault connect/);
-	assert.equal(
-		run(iteration, []).split("\n")[0],
-		"Run iteration connect in a terminal.",
-	);
-
-	const runtime = path.join(home, ".config", "iteration", "runtime");
-	const stateFile = path.join(runtime, "state.json");
-	await assert.rejects(readFile(stateFile), { code: "ENOENT" });
-	await mkdir(runtime, { recursive: true });
-	await writeFile(
-		stateFile,
-		JSON.stringify({
-			version: 1,
-			current: version,
-			previous: null,
-			trial: null,
-			rejected: [],
-			lastCheck: null,
-			lastUpdate: null,
-		}),
-	);
-	run(iteration, []);
-	const state = () => readFile(stateFile, "utf8").then(JSON.parse);
-	assert.equal((await state()).current, version);
-	const launcher = path.join(runtime, "launcher.js");
-	assert.equal(
-		run(process.execPath, [launcher, "launcher-check"]).trim(),
-		version,
-	);
-	assert.equal(run(process.execPath, [launcher, "version"]).trim(), version);
-	const cursorData = path.join(directory, "cursor");
-	assert.equal(
-		run(
-			process.execPath,
-			[launcher, "cursor-hook", "beforeSubmitPrompt", cursorData],
-			'{"conversation_id":"synthetic-smoke"}',
-		).trim(),
-		'{"continue":true}',
-	);
-	const queue = path.join(cursorData, "cursor-hooks");
-	const records = (await readdir(queue)).filter((name) =>
-		name.endsWith(".jsonl"),
-	);
-	assert.equal(records.length, 1);
-	assert.match(
-		await readFile(path.join(queue, records[0]), "utf8"),
-		/synthetic-smoke/,
-	);
-
-	// A failed candidate must not replace the known-good background runtime.
-	const candidate = "999.0.0";
-	const candidateRoot = path.join(runtime, "versions", candidate);
-	await cp(root, candidateRoot, { recursive: true });
-	await writeFile(
-		path.join(candidateRoot, "package.json"),
-		JSON.stringify({ ...manifest, version: candidate }),
-	);
-	await writeFile(
-		path.join(candidateRoot, "dist", "cli.js"),
-		'process.stderr.write("synthetic startup failure\\n"); process.exitCode = 1;',
-	);
-	await writeFile(
-		stateFile,
-		JSON.stringify({
-			...(await state()),
-			current: candidate,
-			previous: version,
-			trial: {
-				version: candidate,
-				previous: version,
-				startedAtMs: Date.now(),
-				expected: ["codex"],
-				starts: {},
-				confirmed: [],
-			},
-		}),
-	);
-	for (let attempt = 0; attempt < 4; attempt++) {
-		const result = spawnSync(process.execPath, [launcher, "run", "codex"], {
-			cwd: directory,
-			env,
-			encoding: "utf8",
-			timeout: 30_000,
-		});
-		if (result.error) throw result.error;
-		assert.equal(result.status, 1);
-		assert.match(
-			result.stderr,
-			attempt < 3 ? /synthetic startup failure/ : /config/,
-		);
-	}
-	const rolledBack = await state();
-	assert.equal(rolledBack.current, version);
-	assert.equal(rolledBack.trial, null);
-	assert.equal(rolledBack.rejected[0].version, candidate);
-	assert.equal(run(iteration, ["version"]).trim(), version);
 	process.stdout.write(
-		`Packed iteration-cli ${version}: both installed entrypoints, version lookup, runtime adoption, launcher, Cursor hook and failed-trial rollback passed.\n`,
+		`Packed collector API ${version}: isolated offline installation, ESM + require(ESM), public declarations and runtime API passed.\n`,
 	);
 } finally {
 	await rm(directory, { recursive: true, force: true });

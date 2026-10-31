@@ -23,7 +23,7 @@ import {
 	parseClaudeLine,
 } from "./claude-transcript.js";
 import { claudeGitHookFiles } from "./claude-git-hook.js";
-import { cursorHookFiles } from "./cursor-hooks.js";
+import { cursorHookFiles } from "./cursor-hook-queue.js";
 import {
 	parseCursorHookLine,
 	parseCursorTranscriptLine,
@@ -185,7 +185,7 @@ export async function scanSourceOnce(
 	const captureState = await scanCaptureState(config, state, policy, accounts);
 	if (!state.initialized || state.sourceDirectory !== sourceDirectory) {
 		throw new Error(
-			`Collector state does not match the ${source} directory; run iteration connect ${source} again.`,
+			`Collector state does not match the ${source} directory; reconnect this source.`,
 		);
 	}
 	const cursors: Record<string, number> = { ...state.cursors };
@@ -463,7 +463,7 @@ async function uploadPendingOnce(
 				null,
 				config.destination === "vault"
 					? "Trace upload could not reach the company vault."
-					: "Trace upload could not reach Iteration.",
+					: "Trace upload could not reach the collector endpoint.",
 				{ cause: error },
 			);
 		}

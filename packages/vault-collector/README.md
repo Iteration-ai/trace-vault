@@ -10,19 +10,22 @@ from source, build and pack from the repository root:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm build
+pnpm --filter @useiteration/trace-vault-collector build
 pnpm pack:collector
+pnpm smoke:collector
 npm install --global ./artifacts/useiteration-trace-vault-collector-0.1.1.tgz --ignore-scripts
 trace-vault --help
 trace-vault connect claude --vault https://vault.example.com
 trace-vault collect claude --vault https://vault.example.com
 ```
 
-This package has no copied source: its build consumes
-`../cli/src/vault-cli.ts` and shared modules from the canonical `iteration-cli`
-package. It does not install or depend on that npm package or the published
-contracts package. Only this collector package is published by Trace Vault's
-public release workflow; Iteration's own publisher owns the other two packages.
+This package has no copied collection source: its build consumes
+`../cli/src/vault-cli.ts` and the reusable `iteration-trace-collector` machinery.
+That library exposes a [supported package API](../cli/README.md) for other hosts.
+Neither this executable nor the public library contains the private Iteration
+CLI's authentication, enrollment, commands, billing, friction summaries or
+product-configured launcher/updater. Only the standalone collector package is
+published by Trace Vault's public collector release workflow.
 
 Use `codex` or `cursor` for those sources. Passwords and invitation tokens are
 prompted privately. `collect` runs in the foreground; `--once` performs one bounded

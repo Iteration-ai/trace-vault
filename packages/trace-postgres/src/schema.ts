@@ -6,7 +6,6 @@ import {
 	index,
 	integer,
 	jsonb,
-	numeric,
 	PgSchema,
 	primaryKey,
 	text,
@@ -27,8 +26,6 @@ const traceEventTypeList = TRACE_EVENT_TYPES.map((type) => {
 	if (!/^[a-z0-9_]+$/.test(type)) throw new Error("Invalid trace event type.");
 	return `'${type}'`;
 }).join(", ");
-const toolActivityList = "'exploring', 'running', 'editing', 'delegating'";
-const usageActivityList = `${toolActivityList}, 'answering'`;
 
 export function traceEventColumns() {
 	return {
@@ -66,13 +63,8 @@ export function traceEventColumns() {
 			mode: "number",
 		}),
 		usageOutputTokens: bigint("usage_output_tokens", { mode: "number" }),
-		billingKind: text("billing_kind"),
-		billingPaidUsd: numeric("billing_paid_usd", { precision: 12, scale: 6 }),
 		pullRequestUrl: text("pull_request_url"),
-		toolActivity: text("tool_activity"),
 		toolFailed: boolean("tool_failed"),
-		usageActivity: text("usage_activity"),
-		usageAfterError: boolean("usage_after_error"),
 		runId: text("thread_id"),
 		parentRunId: text("parent_thread_id"),
 		isRunStart: boolean("is_run_start").notNull().default(false),
@@ -96,11 +88,6 @@ export function traceSessionColumns() {
 		eventCount: bigint("event_count", { mode: "number" }).notNull(),
 		runId: text("thread_id"),
 		parentRunId: text("parent_thread_id"),
-		codexBillingStatus: text("codex_billing_status"),
-		codexBillingSource: text("codex_billing_source"),
-		codexBillingCredits: numeric("codex_billing_credits"),
-		codexBillingAccount: text("codex_billing_account"),
-		codexBillingCheckedAt: timestamptz("codex_billing_checked_at"),
 		ownStartSequence: bigint("own_start_sequence", { mode: "number" }),
 		ownEventCount: bigint("own_event_count", { mode: "number" })
 			.notNull()
@@ -185,22 +172,6 @@ export function traceEventConstraints(
 			"trace_events_type",
 			sql`${table.eventType} IN (${sql.raw(traceEventTypeList)})`,
 		),
-		check(
-			"trace_events_tool_activity",
-			sql`${table.toolActivity} IN (${sql.raw(toolActivityList)})`,
-		),
-		check(
-			"trace_events_usage_activity",
-			sql`${table.usageActivity} IN (${sql.raw(usageActivityList)})`,
-		),
-		check(
-			"trace_events_billing_kind",
-			sql`${table.billingKind} IN ('included', 'paid', 'byok', 'not_charged', 'mixed')`,
-		),
-		check(
-			"trace_events_billing_paid_usd",
-			sql`${table.billingPaidUsd} IS NULL OR (${table.billingPaidUsd} >= 0 AND ${table.billingKind} IN ('paid', 'mixed'))`,
-		),
 		index("trace_events_session_order").on(
 			table.organizationId,
 			table.deviceId,
@@ -255,26 +226,6 @@ export function traceEventConstraints(
 		index("trace_events_usage_time")
 			.on(table.organizationId, table.usageAt)
 			.where(sql`${table.usageAt} IS NOT NULL`),
-		withConcurrency(
-			index("trace_events_usage_workspace").on(
-				table.organizationId,
-				table.usageAt,
-				table.deviceId,
-				table.sessionId,
-				table.userId,
-				table.model,
-				table.usageInputTokens,
-				table.usageCacheReadTokens,
-				table.usageCacheWriteTokens,
-				table.usageCacheWriteLongTokens,
-				table.usageOutputTokens,
-				table.usageActivity,
-				table.usageAfterError,
-				table.billingKind,
-				table.billingPaidUsd,
-			),
-			options,
-		).where(sql`${table.usageAt} IS NOT NULL`),
 		index("trace_events_usage_cost")
 			.on(
 				table.organizationId,
@@ -337,14 +288,6 @@ export function traceSessionConstraints(
 			columns: [table.organizationId, table.deviceId, table.sessionId],
 		}),
 		check("trace_sessions_event_count_positive", sql`${table.eventCount} > 0`),
-		check(
-			"trace_sessions_codex_billing_status",
-			sql`${table.codexBillingStatus} IN ('available', 'partial', 'unavailable')`,
-		),
-		check(
-			"trace_sessions_codex_billing_credits",
-			sql`${table.codexBillingCredits} IS NULL OR ${table.codexBillingStatus} = 'available'`,
-		),
 		check(
 			"trace_sessions_session_id_length",
 			sql`char_length(${table.sessionId}) BETWEEN 1 AND 200`,

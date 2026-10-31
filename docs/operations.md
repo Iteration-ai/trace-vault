@@ -128,6 +128,13 @@ populated former schema, forced interruption, resume, unchanged public exports,
 stable public links and retained tombstones; the container rehearsal separately
 covers fresh installation, replacement and backup/restore.
 
+This upgrade baseline is the published `v0.1.0`, not an earlier unreleased PR
+build. The engine SQL in those PR builds had a different checksum: startup must
+reject it rather than overwrite the migration ledger. Restore the pre-PR backup
+before upgrading. Retaining PR-only data requires a separately reviewed offline
+migration; do not delete ledger rows or ignore checksum failures. See the
+[engine compatibility contract](../packages/trace-postgres/README.md#release-and-upgrade-compatibility).
+
 ## Recover an existing administrator
 
 Recovery is a **local operator action**, authorized by possession of the explicit
@@ -167,11 +174,10 @@ node scripts/rehearse.mjs
 ```
 
 If Docker requires sudo, use `VAULT_REHEARSAL_SUDO=1 node scripts/rehearse.mjs`.
-This builds the shipping image, installs both packed collector packages outside
-the source workspace, smokes `iteration` and both `trace-vault` executables,
-performs private interactive enrollment, imports synthetic history through the
-standalone collector and ongoing records through `iteration-cli`'s vault
-entrypoint, and compares exports across replacement and a separate backup restore.
+This builds the shipping image, installs the standalone collector tarball outside
+the source workspace, smokes `trace-vault`, performs private interactive native
+vault enrollment, imports synthetic history and ongoing records through the
+standalone collector, and compares exports across replacement and a separate backup restore.
 It also checks scope exclusion/redaction, read isolation, restored tombstones and
 operator recovery. It uses random project names/ports and synthetic data only,
 and removes its own containers, volumes and temporary files afterward. Failures

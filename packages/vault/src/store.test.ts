@@ -746,8 +746,38 @@ CREATE TRIGGER interrupt_upgrade BEFORE INSERT ON vault.event_receipts FOR EACH 
 test("vault uses canonical streaming usage replacement without duplicating sessions or replacing ordinary retries", {
 	skip: !databaseUrl,
 }, async (context) => {
-	const { store, member, memberCaller, deviceCaller, policy } =
+	const { store, member, memberCaller, deviceCaller, policy, pool } =
 		await fixture(context);
+	const productColumns = [
+		"billing_kind",
+		"billing_paid_usd",
+		"tool_activity",
+		"usage_activity",
+		"usage_after_error",
+		"codex_billing_status",
+		"codex_billing_source",
+		"codex_billing_credits",
+		"codex_billing_account",
+		"codex_billing_checked_at",
+	];
+	assert.equal(
+		(
+			await pool.query(
+				`SELECT count(*)::int AS count FROM information_schema.columns
+		WHERE table_schema = 'vault_traces' AND column_name = ANY($1::text[])`,
+				[productColumns],
+			)
+		).rows[0].count,
+		0,
+	);
+	assert.equal(
+		(
+			await pool.query(`SELECT count(*)::int AS count FROM pg_proc
+		WHERE pronamespace = 'vault_traces'::regnamespace
+		AND proname IN ('trace_shell_reads_only', 'trace_code_mode_activity', 'trace_tool_activity', 'trace_usage_activity')`)
+		).rows[0].count,
+		0,
+	);
 	const usage = (output: number, sequence: number): TraceEvent => ({
 		...event("streaming-usage", policy.revision),
 		eventType: "token_usage_record",

@@ -1,45 +1,83 @@
-# Iteration CLI
+# Reusable trace collector
 
-`iteration-cli` is the canonical Apache-2.0 collector CLI for Iteration and Trace
-Vault. It requires Node.js 22 or later. Both executables are bundled with no
-runtime npm dependencies:
+`iteration-trace-collector` is the Apache-2.0 collection library owned by Trace
+Vault. The directory name `packages/cli` is historical; the package has **no
+executable**, account provider, hosted endpoint, product commands, billing client,
+friction-summary integration, launcher or updater. It requires Node.js 22+.
 
-- `iteration` connects to an Iteration workspace, imports history, installs
-  background collection and manages automatic updates and rollback.
-- `trace-vault` connects directly to a self-hosted vault without an Iteration
-  account. It collects in the foreground and does not install startup services
-  or an automatic updater.
+The supported API is the package root (`src/index.ts`), with native ESM,
+Node 22 `require(ESM)` and TypeScript declarations. Deep source imports are not an
+API. Consumers import the package rather than copying these modules:
 
-Build and pack from this repository's root:
+```ts
+import {
+  acquireCollectorLock,
+  collectorPaths,
+  collectorSource,
+  collectorSourceDirectory,
+  collectorTick,
+  initializeState,
+  loadConfig,
+  type CollectorConfig,
+} from "iteration-trace-collector";
 
-```sh
-pnpm install --frozen-lockfile
-pnpm build
-pnpm pack:cli
-pnpm smoke:cli
-npm install --global ./artifacts/iteration-cli-0.14.4.tgz --ignore-scripts
-iteration --help
-iteration connect
-iteration status
-iteration version
-trace-vault --help
+const paths = collectorPaths("/absolute/collector-data");
+const config: CollectorConfig = await loadConfig(paths);
+const release = await acquireCollectorLock(paths);
+try {
+  // On first connection, explicitly choose whether to include old sessions.
+  await initializeState(collectorSource(config), collectorSourceDirectory(config), paths, true);
+  await collectorTick(config, paths);
+} finally {
+  await release();
+}
 ```
 
-The package ships `dist/cli.js`, `dist/launcher.js`, `dist/cursor-hook-entry.js`
-and `dist/vault-cli.js`. The managed runtime copies the installed package to
-`~/.config/iteration/runtime`; background services and hooks use its launcher so
-global npm replacement cannot interrupt collection. Updates still resolve
-`iteration-cli` from npm, verify and trial a candidate, and roll back repeated
-startup failures. `iteration update off|on` controls automatic updates.
+## API responsibilities
 
-There is exactly one collector source tree here and one contracts source tree in
-`../trace-contracts`. The [standalone collector](../vault-collector/README.md)
-builds only `src/vault-cli.ts`, without copying it or any shared implementation.
-Use that package if you want only the `trace-vault` executable. Both packages
-provide that executable; install them separately rather than depending on global
-npm bin collision order.
+- `collectorTick`, `scanSourceOnce`, `TraceUploadError`: bounded native scans,
+  redaction, retryable durable outbox upload and acknowledgement. Accept an
+  optional `CollectorFetcher` and cancellation signal at the transport boundary.
+- Storage/config/state/health functions and types: version-compatible local data.
+  `collectorPaths` requires an explicit directory; no product directory or
+  enrollment endpoint is chosen for callers. Existing optional workspace
+  metadata and file formats remain readable for deployed collectors/rollback.
+- `sourceHome`, Claude/Codex/Cursor parsers, Git helpers, redaction and hook-queue
+  readers: native collection without product enrollment or hook installation.
+- `acquireCollectorLock`, `waitForCollectorLock`, `ensurePrivateDirectory` and
+  Windows PowerShell helpers: shared single-writer and private-storage machinery.
+- Vault policy authorization, enrollment, account evidence and metadata-only
+  Claude receiver/setup functions: self-hosted native capture, independent of
+  any Iteration account. Unsupported identity evidence fails closed.
+- `createLogger`, `collectorLogger`, `configureCollectorLogging`: structured
+  diagnostics. A host may configure additional context through a callback;
+  the library reads no Iteration environment variables.
 
-Trace Vault's public release workflow does **not** publish `iteration-cli` or
-`iteration-trace-contracts`. Iteration's publisher publishes those packages from
-the same SHA-pinned canonical source. Their versions evolve independently of
-Trace Vault's server/standalone collector release family.
+The API's runtime implementation is bundled into `dist/index.js`. Its type
+declarations depend on the public `iteration-trace-contracts` and pinned `zod`
+packages, declared as dependencies. Importing the API does not execute a CLI,
+start a service, change a hook or perform authentication.
+
+The [standalone package](../vault-collector/README.md) bundles `src/vault-cli.ts`
+from this same source tree. It remains a dependency-free executable. The private
+Iteration repository owns `iteration-cli`, including Clerk sign-in, workspace
+enrollment, default endpoint, product commands, progress/friction/billing clients,
+OS service installation and managed-runtime updating. It bundles this supported
+library API into its own entries; none of that product code lives here.
+
+## Verify the package boundary
+
+From the repository root:
+
+```sh
+pnpm --filter iteration-trace-collector build
+pnpm pack:collector-core
+node scripts/pack.mjs trace-contracts
+node scripts/smoke-cli.mjs
+```
+
+The smoke installs local tarballs offline in an isolated directory, exercises
+the supported API against synthetic history, checks public declarations and
+rejects product integration code in the bundled library. This check does not
+publish a package. Public collector/core versions do not track Iteration CLI
+versions or control its updater.

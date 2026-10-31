@@ -75,13 +75,8 @@ CREATE TABLE "vault_traces"."trace_events" (
 	"usage_cache_write_tokens" bigint,
 	"usage_cache_write_long_tokens" bigint,
 	"usage_output_tokens" bigint,
-	"billing_kind" text,
-	"billing_paid_usd" numeric(12, 6),
 	"pull_request_url" text,
-	"tool_activity" text,
 	"tool_failed" boolean,
-	"usage_activity" text,
-	"usage_after_error" boolean,
 	"thread_id" text,
 	"parent_thread_id" text,
 	"is_run_start" boolean DEFAULT false NOT NULL,
@@ -99,11 +94,7 @@ CREATE TABLE "vault_traces"."trace_events" (
 	CONSTRAINT "trace_events_session_id_length" CHECK (char_length("vault_traces"."trace_events"."session_id") BETWEEN 1 AND 200),
 	CONSTRAINT "trace_events_call_id_length" CHECK ("vault_traces"."trace_events"."call_id" IS NULL OR char_length("vault_traces"."trace_events"."call_id") <= 255),
 	CONSTRAINT "trace_events_payload_object" CHECK (jsonb_typeof("vault_traces"."trace_events"."payload") = 'object'),
-	CONSTRAINT "trace_events_type" CHECK ("vault_traces"."trace_events"."event_type" IN ('user_message', 'assistant_message', 'tool_call', 'tool_result', 'session_meta', 'task_started', 'turn_context', 'compacted', 'token_usage_record', 'token_count', 'world_state', 'retained_context', 'security_risk_score', 'reasoning', 'agent_reasoning', 'agent_reasoning_raw_content', 'todo_list', 'compaction', 'context_compaction', 'configuration_update', 'additional_tools', 'task_complete', 'turn_complete', 'thread_goal_updated', 'thread_rolled_back', 'turn_aborted', 'thread_settings_applied', 'source_record')),
-	CONSTRAINT "trace_events_tool_activity" CHECK ("vault_traces"."trace_events"."tool_activity" IN ('exploring', 'running', 'editing', 'delegating')),
-	CONSTRAINT "trace_events_usage_activity" CHECK ("vault_traces"."trace_events"."usage_activity" IN ('exploring', 'running', 'editing', 'delegating', 'answering')),
-	CONSTRAINT "trace_events_billing_kind" CHECK ("vault_traces"."trace_events"."billing_kind" IN ('included', 'paid', 'byok', 'not_charged', 'mixed')),
-	CONSTRAINT "trace_events_billing_paid_usd" CHECK ("vault_traces"."trace_events"."billing_paid_usd" IS NULL OR ("vault_traces"."trace_events"."billing_paid_usd" >= 0 AND "vault_traces"."trace_events"."billing_kind" IN ('paid', 'mixed')))
+	CONSTRAINT "trace_events_type" CHECK ("vault_traces"."trace_events"."event_type" IN ('user_message', 'assistant_message', 'tool_call', 'tool_result', 'session_meta', 'task_started', 'turn_context', 'compacted', 'token_usage_record', 'token_count', 'world_state', 'retained_context', 'security_risk_score', 'reasoning', 'agent_reasoning', 'agent_reasoning_raw_content', 'todo_list', 'compaction', 'context_compaction', 'configuration_update', 'additional_tools', 'task_complete', 'turn_complete', 'thread_goal_updated', 'thread_rolled_back', 'turn_aborted', 'thread_settings_applied', 'source_record'))
 );
 --> statement-breakpoint
 CREATE TABLE "vault_traces"."trace_session_deletions" (
@@ -123,11 +114,6 @@ CREATE TABLE "vault_traces"."trace_sessions" (
 	"event_count" bigint NOT NULL,
 	"thread_id" text,
 	"parent_thread_id" text,
-	"codex_billing_status" text,
-	"codex_billing_source" text,
-	"codex_billing_credits" numeric,
-	"codex_billing_account" text,
-	"codex_billing_checked_at" timestamp with time zone,
 	"own_start_sequence" bigint,
 	"own_event_count" bigint DEFAULT 0 NOT NULL,
 	"agent_path" text,
@@ -148,8 +134,6 @@ CREATE TABLE "vault_traces"."trace_sessions" (
 	"last_received_at" timestamp with time zone NOT NULL,
 	CONSTRAINT "trace_sessions_pkey" PRIMARY KEY("organization_id","device_id","session_id"),
 	CONSTRAINT "trace_sessions_event_count_positive" CHECK ("vault_traces"."trace_sessions"."event_count" > 0),
-	CONSTRAINT "trace_sessions_codex_billing_status" CHECK ("vault_traces"."trace_sessions"."codex_billing_status" IN ('available', 'partial', 'unavailable')),
-	CONSTRAINT "trace_sessions_codex_billing_credits" CHECK ("vault_traces"."trace_sessions"."codex_billing_credits" IS NULL OR "vault_traces"."trace_sessions"."codex_billing_status" = 'available'),
 	CONSTRAINT "trace_sessions_session_id_length" CHECK (char_length("vault_traces"."trace_sessions"."session_id") BETWEEN 1 AND 200)
 );
 --> statement-breakpoint
@@ -174,7 +158,6 @@ CREATE INDEX "trace_events_user_message_order" ON "vault_traces"."trace_events" 
 CREATE INDEX "trace_events_organization_received" ON "vault_traces"."trace_events" USING btree ("organization_id","ingested_at");--> statement-breakpoint
 CREATE INDEX "trace_events_user_session" ON "vault_traces"."trace_events" USING btree ("organization_id","user_id","session_id");--> statement-breakpoint
 CREATE INDEX "trace_events_usage_time" ON "vault_traces"."trace_events" USING btree ("organization_id","usage_at") WHERE "vault_traces"."trace_events"."usage_at" IS NOT NULL;--> statement-breakpoint
-CREATE INDEX "trace_events_usage_workspace" ON "vault_traces"."trace_events" USING btree ("organization_id","usage_at","device_id","session_id","user_id","model","usage_input_tokens","usage_cache_read_tokens","usage_cache_write_tokens","usage_cache_write_long_tokens","usage_output_tokens","usage_activity","usage_after_error","billing_kind","billing_paid_usd") WHERE "vault_traces"."trace_events"."usage_at" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "trace_events_usage_cost" ON "vault_traces"."trace_events" USING btree ("organization_id","device_id","session_id","usage_at","model","usage_input_tokens","usage_cache_read_tokens","usage_cache_write_tokens","usage_cache_write_long_tokens","usage_output_tokens") WHERE "vault_traces"."trace_events"."usage_at" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "trace_events_usage_session" ON "vault_traces"."trace_events" USING btree ("organization_id","device_id","session_id","usage_at") WHERE "vault_traces"."trace_events"."usage_at" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "trace_events_turn_context" ON "vault_traces"."trace_events" USING btree ("organization_id","device_id","session_id",("payload"->>'turn_id')) WHERE "vault_traces"."trace_events"."event_type" = 'turn_context';--> statement-breakpoint

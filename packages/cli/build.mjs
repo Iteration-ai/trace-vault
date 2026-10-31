@@ -1,4 +1,4 @@
-import { copyFile, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
@@ -78,9 +78,5 @@ export async function buildCollectorBundles(entries) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-	await buildCollectorBundles(
-		["cli", "cursor-hook-entry", "launcher", "vault-cli"].map(
-			(name) => `src/${name}.ts`,
-		),
-	);
+	await buildCollectorBundles(["src/index.ts"]);
 }

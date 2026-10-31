@@ -11,22 +11,22 @@ The following paths originate from the Apache-2.0 grant in Thytu/Iteration's
 - `src/app/globals.css`
 
 Standalone build, packaging, documentation and workflow support is also
-Apache-2.0. No proprietary Iteration application or Git history is included.
+Apache-2.0. This grant does not cover the rest of Iteration's private application
+or its Git history. Removing consumer-specific code from the current tree does
+not revoke Apache-2.0 grants for previously distributed code.
 The grant conveys no rights to Iteration trademarks beyond the license.
 Third-party components retain their respective licenses; collector bundles
 include `THIRD-PARTY-NOTICES.txt` and preserved legal comments.
 
-`packages/cli` owns the complete `iteration-cli`, including its Iteration
-entrypoint, device authentication, history import, status rendering, launcher,
-Cursor hook entrypoint and background-runtime supervision. Those modules are
-part of the original explicit Apache-2.0 grant; no proprietary app code is needed.
-`packages/vault-collector` contains only standalone packaging and builds directly
-from the canonical CLI modules, not a copied implementation.
+`packages/cli` owns reusable collection machinery and the standalone Vault
+entrypoint. Consumer-specific authentication, enrollment, commands and analysis
+integrations do not belong in this repository. `packages/vault-collector`
+contains standalone packaging and builds directly from that collection source,
+not a copied implementation.
 
-`iteration-trace-contracts` is the canonical shared contract package. Iteration's
-publisher may publish it and `iteration-cli` from a pinned copy of this repository.
-The public Trace Vault workflow publishes neither; the standalone collector
-bundles the contracts and has no runtime npm dependencies.
+`iteration-trace-contracts` contains trace formats and capture-policy contracts,
+not a consumer's login, billing or learning APIs. The standalone collector bundles
+the contracts and has no runtime npm dependencies.
 
 `packages/trace-postgres` contains the shared trace persistence engine extracted
 from Iteration's PostgreSQL integration: trace column/constraint declarations,

@@ -15,6 +15,14 @@ type LogEntry = Readonly<{
 type LogContext = Readonly<{ component: string; source?: string }>;
 type LogWriter = (line: string, level: LogLevel) => void;
 
+let loggingContext: () => Readonly<Record<string, LogValue>> = () => ({});
+
+export function configureCollectorLogging(
+	context: () => Readonly<Record<string, LogValue>>,
+): void {
+	loggingContext = context;
+}
+
 function writeLog(line: string, level: LogLevel): void {
 	if (level === "info") console.info(line);
 	else console.error(line);
@@ -31,7 +39,7 @@ export function createLogger(
 				...context,
 				at: new Date().toISOString(),
 				pid: process.pid,
-				runtimeVersion: process.env.ITERATION_RUNTIME_VERSION ?? null,
+				...loggingContext(),
 			}),
 			entry.level,
 		);

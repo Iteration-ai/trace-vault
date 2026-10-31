@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -53,6 +53,12 @@ try {
 		"THIRD-PARTY-NOTICES.txt",
 		"vault-cli.js",
 	]);
+	if (published === undefined) {
+		assert.doesNotMatch(
+			await readFile(path.join(root, "dist/vault-cli.js"), "utf8"),
+			/useiteration\.com|clerk-device-auth|collector-auth\/expand|collector-progress|friction-summary|codex-billing|cursor-billing|ITERATION_RUNTIME_VERSION/,
+		);
+	}
 	const help = execFileSync(
 		path.join(directory, "node_modules", ".bin", "trace-vault"),
 		["--help"],

@@ -55,7 +55,7 @@ const sendCollectorRequest: CollectorFetcher = (input, init = {}) => {
 					size += chunk.byteLength;
 					if (size > MAX_RESPONSE_BYTES) {
 						response.destroy(
-							new Error("Iteration returned an oversized response."),
+							new Error("Collector endpoint returned an oversized response."),
 						);
 						return;
 					}

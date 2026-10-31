@@ -62,85 +62,6 @@ export type JsonValue =
 	| readonly JsonValue[]
 	| { readonly [key: string]: JsonValue };
 
-export const cursorBillingRequestSchema = z
-	.object({
-		conversationId: z.uuid(),
-		reconcileFromMs: z.number().int().nonnegative().nullable(),
-		events: z
-			.array(
-				z
-					.object({
-						timestamp: z.number().int().nonnegative(),
-						kind: z.enum([
-							"included",
-							"paid",
-							"byok",
-							"not_charged",
-							"unknown",
-						]),
-						inputTokens: z.number().int().nonnegative().nullable(),
-						outputTokens: z.number().int().nonnegative().nullable(),
-						cacheReadTokens: z.number().int().nonnegative().nullable(),
-						cacheWriteTokens: z.number().int().nonnegative().nullable(),
-						paidUsd: z.number().finite().nonnegative().nullable(),
-					})
-					.strict(),
-			)
-			.max(5000),
-	})
-	.strict();
-
-export type CursorBillingRequest = z.infer<typeof cursorBillingRequestSchema>;
-
-export function codexCreditSign(value: string): -1 | 0 | 1 {
-	const mantissa = value.split(/[eE]/, 1)[0]!;
-	if (!/[1-9]/.test(mantissa)) return 0;
-	return mantissa.startsWith("-") ? -1 : 1;
-}
-
-export const codexBillingRequestSchema = z
-	.object({
-		accountFingerprint: z.string().regex(/^[0-9a-f]{64}$/),
-		reconcile: z.boolean(),
-		tasks: z
-			.array(
-				z
-					.object({
-						threadId: z.uuid(),
-						createdAt: z.iso.datetime().nullable(),
-						descendantThreadIds: z.array(z.uuid()).max(900),
-						dataStatus: z.enum([
-							"available",
-							"partial",
-							"unavailable",
-							"not_queried",
-						]),
-						usageSource: z.string().max(100),
-						balanceUsageCredits: z
-							.string()
-							.regex(/^[+-]?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d{1,3})?$/)
-							.max(128)
-							.nullable(),
-					})
-					.strict(),
-			)
-			.max(100),
-		authTurns: z
-			.array(
-				z
-					.object({
-						threadId: z.uuid(),
-						turnId: z.uuid(),
-						mode: z.enum(["chatgpt", "api_key", "conflicting"]),
-					})
-					.strict(),
-			)
-			.max(5000),
-	})
-	.strict();
-
-export type CodexBillingRequest = z.infer<typeof codexBillingRequestSchema>;
-
 export type TraceRunMarker =
 	| Readonly<{
 			kind: "identity";
@@ -168,50 +89,6 @@ export type TraceEventBatch = Readonly<{ events: readonly TraceEvent[] }>;
 export type TraceEventAcknowledgement = Readonly<{
 	deviceId: string;
 	acceptedEventIds: readonly string[];
-}>;
-
-export type CollectorEnrollmentRequest = Readonly<{
-	deviceName: string;
-	organizationId?: string;
-	source?: CollectorSource;
-}>;
-
-export type CollectorExpansionRequest = Readonly<{
-	source: CollectorSource;
-	token: string;
-	organizationId?: string;
-}>;
-
-export type CollectorOrganizationOption = Readonly<{
-	id: string;
-	name: string;
-}>;
-
-export type CollectorEnrollmentResponse =
-	| Readonly<{
-			status: "enrolled";
-			token: string;
-			deviceId: string;
-			organizationId: string;
-			organizationName: string;
-	  }>
-	| Readonly<{
-			status: "choose_organization";
-			organizations: readonly CollectorOrganizationOption[];
-			hasMore: boolean;
-	  }>;
-
-// A collector's import of the sessions saved before it connected. `complete`
-// means every listed session was read and every queued event was uploaded.
-export type CollectorHistoryProgress = Readonly<{
-	sessions: number;
-	readSessions: number;
-	complete: boolean;
-}>;
-
-export type CollectorFrictionSummary = Readonly<{
-	weekEpisodes: number;
-	dayEpisodes: number;
 }>;
 
 export type ParseResult<T> =
@@ -334,89 +211,6 @@ export const acknowledgementSchema = z
 		"Accepted event IDs must match the submitted batch exactly, without duplicates.",
 	);
 
-const episodeCountSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
-export const collectorFrictionSummarySchema = z
-	.object({ weekEpisodes: episodeCountSchema, dayEpisodes: episodeCountSchema })
-	.strict()
-	.refine(
-		(summary) => summary.dayEpisodes <= summary.weekEpisodes,
-		"The last day cannot have more friction episodes than the last week.",
-	)
-	.describe("dayEpisodes must not exceed weekEpisodes.");
-
-const sessionCountSchema = z.number().int().min(0).max(1_000_000);
-export const collectorHistoryProgressSchema = z
-	.object({
-		sessions: sessionCountSchema,
-		readSessions: sessionCountSchema,
-		complete: z.boolean(),
-	})
-	.strict()
-	.refine(
-		(progress) => progress.readSessions <= progress.sessions,
-		"Read sessions cannot exceed listed sessions.",
-	)
-	.refine(
-		(progress) =>
-			!progress.complete || progress.readSessions === progress.sessions,
-		"A complete import has read every listed session.",
-	)
-	.describe(
-		"readSessions must not exceed sessions; complete requires equal counts.",
-	);
-
-export const collectorEnrollmentRequestSchema = z
-	.object({
-		deviceName: z
-			.string()
-			.trim()
-			.min(1)
-			.max(160)
-			.describe("Trimmed before length validation."),
-		organizationId: z.string().regex(UUID_PATTERN).optional(),
-		source: z.enum(COLLECTOR_SOURCES).optional(),
-	})
-	.strict();
-
-export const collectorExpansionRequestSchema = z
-	.object({
-		source: z.enum(COLLECTOR_SOURCES),
-		token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
-		organizationId: z.string().regex(UUID_PATTERN).optional(),
-	})
-	.strict();
-
-export const collectorEnrollmentResponseSchema = z.discriminatedUnion(
-	"status",
-	[
-		z
-			.object({
-				status: z.literal("enrolled"),
-				token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
-				deviceId: z.string().regex(UUID_PATTERN),
-				organizationId: z.string().regex(UUID_PATTERN),
-				organizationName: z.string().min(1).max(160),
-			})
-			.strict(),
-		z
-			.object({
-				status: z.literal("choose_organization"),
-				organizations: z
-					.array(
-						z
-							.object({
-								id: z.string().regex(UUID_PATTERN),
-								name: z.string().min(1).max(160),
-							})
-							.strict(),
-					)
-					.max(20),
-				hasMore: z.boolean(),
-			})
-			.strict(),
-	],
-);
-
 function schemaError(error: z.ZodError, fallback: string): string {
 	return error.issues[0]?.message ?? fallback;
 }
@@ -452,63 +246,6 @@ export function parseTracePayload(
 		return {
 			success: false,
 			error: schemaError(parsed.error, "Trace payload must be a JSON object."),
-		};
-	}
-	return { success: true, value: parsed.data };
-}
-
-export function parseCollectorEnrollmentRequest(
-	input: unknown,
-): ParseResult<CollectorEnrollmentRequest> {
-	const parsed = collectorEnrollmentRequestSchema.safeParse(input);
-	if (!parsed.success) {
-		return {
-			success: false,
-			error: schemaError(
-				parsed.error,
-				"Collector enrollment request is invalid.",
-			),
-		};
-	}
-	return { success: true, value: parsed.data };
-}
-
-export function parseCollectorExpansionRequest(
-	input: unknown,
-): ParseResult<CollectorExpansionRequest> {
-	const parsed = collectorExpansionRequestSchema.safeParse(input);
-	return parsed.success
-		? { success: true, value: parsed.data }
-		: { success: false, error: "Collector source is invalid." };
-}
-
-export function parseCollectorHistoryProgress(
-	input: unknown,
-): ParseResult<CollectorHistoryProgress> {
-	const parsed = collectorHistoryProgressSchema.safeParse(input);
-	if (!parsed.success) {
-		return {
-			success: false,
-			error: schemaError(
-				parsed.error,
-				"Collector history progress is invalid.",
-			),
-		};
-	}
-	return { success: true, value: parsed.data };
-}
-
-export function parseCollectorEnrollmentResponse(
-	input: unknown,
-): ParseResult<CollectorEnrollmentResponse> {
-	const parsed = collectorEnrollmentResponseSchema.safeParse(input);
-	if (!parsed.success) {
-		return {
-			success: false,
-			error: schemaError(
-				parsed.error,
-				"Collector enrollment response is invalid.",
-			),
 		};
 	}
 	return { success: true, value: parsed.data };
@@ -587,17 +324,4 @@ export function normalizeWindowsLaunchDirectory(value: string): string | null {
 	return /^[A-Z]:\/$/.test(normalized)
 		? normalized
 		: normalized.replace(/\/+$/, "");
-}
-
-export function parseCollectorFrictionSummary(
-	input: unknown,
-): ParseResult<CollectorFrictionSummary> {
-	const parsed = collectorFrictionSummarySchema.safeParse(input);
-	if (!parsed.success) {
-		return {
-			success: false,
-			error: schemaError(parsed.error, "Friction summary is invalid."),
-		};
-	}
-	return { success: true, value: parsed.data };
 }

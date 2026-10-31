@@ -52,6 +52,13 @@ importers:
         version: 5.9.3
 
   packages/cli:
+    dependencies:
+      iteration-trace-contracts:
+        specifier: workspace:*
+        version: link:../trace-contracts
+      zod:
+        specifier: 4.6.6
+        version: 4.6.6
     devDependencies:
       '@secretlint/core':
         specifier: 13.0.6
@@ -65,12 +72,6 @@ importers:
       esbuild:
         specifier: 0.28.2
         version: 0.28.2
-      iteration-trace-contracts:
-        specifier: workspace:*
-        version: link:../trace-contracts
-      zod:
-        specifier: 4.6.6
-        version: 4.6.6
 
   packages/trace-contracts:
     dependencies:

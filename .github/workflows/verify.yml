@@ -85,8 +85,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm pack:collector && pnpm smoke:collector
-      - run: pnpm pack:cli && pnpm smoke:cli
       - run: pnpm pack:contracts && pnpm smoke:contracts
+      - run: pnpm pack:collector-core && pnpm smoke:collector-core
       - run: pnpm smoke:published
       - name: Build standalone image
         run: |

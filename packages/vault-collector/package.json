@@ -23,6 +23,6 @@
 		"access": "public"
 	},
 	"scripts": {
-		"build": "pnpm --filter iteration-trace-contracts build && pnpm --filter iteration-cli exec tsc --noEmit && node build.mjs"
+		"build": "pnpm --filter iteration-trace-contracts build && pnpm --filter iteration-trace-collector exec tsc --noEmit && node build.mjs"
 	}
 }

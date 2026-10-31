@@ -9,10 +9,10 @@ import {
 	COLLECTOR_SOURCES,
 	vaultCapturePolicySchema,
 } from "iteration-trace-contracts";
-import { sourceHome } from "./auto-connect.js";
+import { sourceHome } from "./source-home.js";
 import { CLAUDE_ACCOUNT_VERSION } from "./claude-account.js";
 import { collectorTick } from "./collector.js";
-import { acquireCollectorLock } from "./service.js";
+import { acquireCollectorLock } from "./collector-lock.js";
 import {
 	collectorPaths,
 	collectorSource,

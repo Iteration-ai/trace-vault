@@ -11,10 +11,12 @@ transaction; do not catch it and commit partial work.
 `traceSessionDeletionColumns()` return fresh Drizzle column builders.
 `traceEventConstraints(table)`, `traceSessionConstraints(table)` and
 `traceSessionDeletionConstraints(table)` return canonical keys, checks and
-indexes. Hosts append their own foreign keys. `bindTraceTables(schema,
-{concurrently: false})` binds the three tables without host foreign keys and
+indexes. Hosts append their own columns, constraints, indexes and foreign keys
+for product-specific analysis or billing; those are not part of the raw engine.
+Source-reported tool failures remain normalized archive evidence.
+`bindTraceTables(schema, {concurrently: false})` binds the three tables without host foreign keys and
 disables concurrent index creation for transactional host migrations. The default
-preserves private concurrent indexes. Schema names are explicit lowercase
+uses concurrent indexes. Schema names are explicit lowercase
 PostgreSQL identifiers, never inferred from `search_path`, including `public`.
 
 After creating/migrating those tables, call
@@ -27,6 +29,23 @@ are stable and unique by tenant/stream. Projection functions use explicitly
 qualified host relations/functions and a fixed `pg_catalog` search path.
 Host migrations must precede this installer; semantic projection changes need
 a new canonical SQL version and an explicit host data backfill.
+
+### Release and upgrade compatibility
+
+The published Vault `v0.1.0` contains only Vault migrations `0000` through `0002`,
+not this engine, its checksum ledger, or Vault migration `0003`. Those published
+migrations remain byte-for-byte unchanged. The new engine SQL and `0003` were
+sanitized before release, not extended with a migration that republishes removed
+product algorithms. A stopped-writer upgrade from `v0.1.0` runs `0003`, installs
+the engine, and verifies the resumable archive copy before removing old tables.
+
+An installation of an earlier PR build is **not** the published upgrade baseline.
+Its engine `0001` checksum differs and installation must fail. Do not delete or
+edit that ledger, ignore the checksum error, or rerun edited SQL over it. Stop
+writers and restore the pre-PR backup, then run the supported upgrade. If PR-only
+data must be retained, an explicitly reviewed offline data migration is required
+before upgrade; this package does not implement that recovery. Do not use a PR
+build against a database without a restorable backup.
 
 ## Ingestion
 
@@ -55,6 +74,10 @@ duplicated in this metadata. Replays and tombstoned rows are acknowledged but
 absent from `changedEvents`; metadata session IDs come only from changed rows.
 Public hosts can create receipt/session UUID metadata from inserted rows and
 update receipt provenance for usage replacements in the extension.
+Hosts that attach product analysis repair it in this callback, in the same
+transaction. A usage replacement can invalidate host attribution; acknowledged
+replays and rejected/tombstoned writes must not invalidate it. The engine itself
+does not classify activity, attribute costs, or reset host-owned fields.
 
 Canonical session columns `sourceTitle`, `sourceCwd`, and `sourceRepositoryUrl`
 are the last nonblank session metadata values in `(sequence, event_id COLLATE C)`
@@ -62,7 +85,7 @@ order. Cwd and repository values preserve meaningful internal whitespace.
 `firstUserMessagePreview` is the first nonblank message in that ordering, with
 Unicode whitespace collapsed and a 160-Unicode-character limit. Its shared SQL
 extractor tries text, message, then text/input_text content blocks, falling through
-Unicode-only blanks. These fields do not require run markers; private
+Unicode-only blanks. These fields do not require run markers; the distinct
 `userMessagePreview` and own-run launch/lineage projections retain their existing
 semantics. Adopting populated tables requires a batched host backfill calling
 `schema.trace_session_presentation(organization_id, device_id, session_id)`;
