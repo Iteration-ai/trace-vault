@@ -5,6 +5,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
+import * as z from "zod";
 import {
 	acquireCollectorLock,
 	collectorPaths,
@@ -80,12 +81,18 @@ process.disconnect();
 				async next() {
 					const result = await messages.next();
 					assert.ok(!result.done, errors);
-					const [value] = result.value as unknown[];
-					assert.ok(
-						value && typeof value === "object" && "type" in value,
-						errors,
-					);
-					return value as { type: string; message?: string };
+					return z
+						.object({
+							type: z.enum([
+								"ready",
+								"paused",
+								"acquired",
+								"rejected",
+								"released",
+							]),
+							message: z.string().optional(),
+						})
+						.parse(result.value[0]);
 				},
 				async stop() {
 					if (child.exitCode === null && child.signalCode === null)
