@@ -1,14 +1,6 @@
 import type { ReactNode } from "react";
 
-export const tones = [
-	"neutral",
-	"accent",
-	"ok",
-	"warn",
-	"err",
-	"info",
-] as const;
-export type Tone = (typeof tones)[number];
+export type Tone = "neutral" | "accent" | "ok" | "warn" | "err" | "info";
 
 const badgeToneClasses = {
 	neutral: "border-line-strong text-fg-3",
@@ -65,13 +57,5 @@ export function StatusText({
 			<StatusDot tone={tone} />
 			{children}
 		</span>
-	);
-}
-
-export function Kbd({ children }: Readonly<{ children: ReactNode }>) {
-	return (
-		<kbd className="inline-grid h-5 min-w-5 place-items-center rounded-sm border border-line-strong bg-raised px-1 text-2xs text-fg-2">
-			{children}
-		</kbd>
 	);
 }

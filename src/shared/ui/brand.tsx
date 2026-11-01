@@ -1,5 +1,4 @@
-export const brandSizes = ["sm", "md"] as const;
-export type BrandSize = (typeof brandSizes)[number];
+export type BrandSize = "sm" | "md";
 
 const brandMarkClasses = {
 	sm: "size-5 shrink-0",
