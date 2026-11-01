@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { copyFile, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -77,6 +78,8 @@ export async function buildCollectorBundles(entries) {
 	]);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Node reports this module by its real path, so a symlinked launch path, such
+// as macOS's /var, must be resolved before comparing.
+if (import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
 	await buildCollectorBundles(["src/index.ts"]);
 }
