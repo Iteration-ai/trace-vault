@@ -153,7 +153,7 @@ function AuditRow({ record }: { record: AuditRecord }) {
 						className="w-full min-w-0 justify-start text-fg hover:bg-transparent"
 						aria-expanded={open}
 						aria-controls={detailId}
-						aria-label={`Audit record: ${actionLabel(record.action)} by ${actor}`}
+						aria-label={`Audit record ${record.id}: ${actionLabel(record.action)}`}
 						onClick={() => setOpen((value) => !value)}
 					>
 						<Icon
@@ -190,6 +190,9 @@ function AuditRow({ record }: { record: AuditRecord }) {
 						<dt className="text-fg-3">Recorded at</dt>
 						<dd className="m-0 min-w-0 break-all text-fg-2">
 							{formatTime(record.createdAt)}
+							<span className="mt-0.5 block font-mono text-fg-3">
+								{record.createdAt}
+							</span>
 						</dd>
 						<dt className="text-fg-3">Action</dt>
 						<dd className="m-0 min-w-0 font-mono break-all text-fg-2">

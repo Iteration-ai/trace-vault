@@ -2,6 +2,7 @@ import {
 	TRACE_EVENT_TYPES,
 	type TraceEventType,
 } from "iteration-trace-contracts";
+import { z } from "zod";
 
 const TRACE_EVENT_LABELS = {
 	user_message: "User message",
@@ -91,23 +92,41 @@ export function traceEventKind(eventType: string): TraceEventKind {
 
 type Payload = Record<string, unknown>;
 
+// Payloads keep each source's original shape, so every field is parsed where
+// it is read and anything unexpected reads as absent.
+const payloadSchema = z.record(z.string(), z.unknown());
+const textSchema = z.string().refine((value) => value.trim() !== "");
+const listSchema = z.array(z.unknown());
+const countSchema = z.number();
+
 function record(value: unknown): Payload | null {
-	return typeof value === "object" && value !== null && !Array.isArray(value)
-		? (value as Payload)
-		: null;
+	const parsed = payloadSchema.safeParse(value);
+	return parsed.success ? parsed.data : null;
 }
 
 function text(value: unknown): string | null {
-	return typeof value === "string" && value.trim() ? value : null;
+	const parsed = textSchema.safeParse(value);
+	return parsed.success ? parsed.data : null;
+}
+
+function texts(value: unknown): string[] {
+	const list = listSchema.safeParse(value);
+	return list.success
+		? list.data.flatMap((part) => {
+				const found = text(part);
+				return found === null ? [] : [found];
+			})
+		: [];
 }
 
 function contentText(value: unknown): string | null {
-	if (typeof value === "string") return text(value);
-	if (!Array.isArray(value)) return null;
-	const parts = value.flatMap((part) => {
-		const block = record(part);
-		const value = block ? text(block.text) : text(part);
-		return value ? [value] : [];
+	const direct = text(value);
+	if (direct !== null) return direct;
+	const list = listSchema.safeParse(value);
+	if (!list.success) return null;
+	const parts = list.data.flatMap((part) => {
+		const found = text(record(part)?.text) ?? text(part);
+		return found === null ? [] : [found];
 	});
 	return parts.length ? parts.join("\n\n") : null;
 }
@@ -142,10 +161,9 @@ const argumentKeys = [
 ] as const;
 
 function commandText(value: unknown): string | null {
-	if (!Array.isArray(value)) return text(value);
-	const parts = value.filter(
-		(part): part is string => typeof part === "string",
-	);
+	const direct = text(value);
+	if (direct !== null) return direct;
+	const parts = texts(value);
 	// Codex wraps commands as ["bash", "-lc", "<script>"].
 	if (parts.length === 3 && /^-l?c$/.test(parts[1] ?? "")) return parts[2]!;
 	return parts.length ? parts.join(" ") : null;
@@ -162,9 +180,11 @@ function inputSummary(input: unknown): string | null {
 }
 
 function claudeToolInput(payload: Payload, callId: string | null): unknown {
-	const blocks = record(record(payload.record)?.message)?.content;
-	if (!Array.isArray(blocks)) return null;
-	const block = blocks
+	const blocks = listSchema.safeParse(
+		record(record(payload.record)?.message)?.content,
+	);
+	if (!blocks.success) return null;
+	const block = blocks.data
 		.map(record)
 		.find((item) => item?.type === "tool_use" && item.id === callId);
 	return block?.input ?? null;
@@ -175,18 +195,20 @@ export function toolArgument(
 	callId: string | null,
 ): string | null {
 	if (payload.input !== undefined) return inputSummary(payload.input);
-	if (typeof payload.arguments === "string") {
+	const encoded = z.string().safeParse(payload.arguments);
+	if (encoded.success) {
 		try {
-			return inputSummary(JSON.parse(payload.arguments));
+			return inputSummary(JSON.parse(encoded.data));
 		} catch {
-			return text(payload.arguments);
+			return text(encoded.data);
 		}
 	}
 	return inputSummary(claudeToolInput(payload, callId));
 }
 
 function count(value: unknown): number | null {
-	return typeof value === "number" && Number.isFinite(value) ? value : null;
+	const parsed = countSchema.safeParse(value);
+	return parsed.success ? parsed.data : null;
 }
 
 // A one-line summary for system records whose payload has a known shape.

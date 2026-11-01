@@ -1,10 +1,14 @@
-export const brandSizes = ["sm", "md"] as const;
-export type BrandSize = (typeof brandSizes)[number];
+export type BrandSize = "sm" | "md";
 
 const brandMarkClasses = {
 	sm: "size-5 shrink-0",
 	md: "size-6 shrink-0",
 } as const satisfies Record<BrandSize, string>;
+
+const brandMarkPixels = {
+	sm: 20,
+	md: 24,
+} as const satisfies Record<BrandSize, number>;
 
 type Dot = Readonly<{ x: number; y: number; radius: number }>;
 
@@ -54,7 +58,9 @@ export function BrandMark({ size = "md" }: Readonly<{ size?: BrandSize }>) {
 			aria-hidden="true"
 			className={brandMarkClasses[size]}
 			fill="currentColor"
+			height={brandMarkPixels[size]}
 			viewBox="0 0 100 100"
+			width={brandMarkPixels[size]}
 		>
 			{markDots.map((dot) => (
 				<circle

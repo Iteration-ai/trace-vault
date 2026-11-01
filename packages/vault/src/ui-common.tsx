@@ -11,11 +11,7 @@ import { ToolLogo } from "../../../src/shared/ui/tool-logos";
 export { Button, buttonClasses } from "../../../src/shared/ui/button";
 export { Input, Select } from "../../../src/shared/ui/field";
 export { Notice } from "../../../src/shared/ui/notice";
-export {
-	Panel,
-	codeBlockClass,
-	popoverClasses,
-} from "../../../src/shared/ui/panel";
+export { codeBlockClass, popoverClasses } from "../../../src/shared/ui/panel";
 export { Icon } from "../../../src/shared/ui/icon";
 export { Badge, StatusText } from "../../../src/shared/ui/badge";
 export {
@@ -215,13 +211,7 @@ export function Feedback({ action }: { action: ReturnType<typeof useAction> }) {
 }
 
 // Grey rows that hold the collection's shape while it loads.
-export function LoadingRows({
-	label,
-	rows = 8,
-}: {
-	label: string;
-	rows?: number;
-}) {
+function LoadingRows({ label, rows = 8 }: { label: string; rows?: number }) {
 	return (
 		<div className={tableFrameClass} role="status" aria-label={label}>
 			<div className="h-9 border-b border-line" />
@@ -503,9 +493,10 @@ const relativeUnits = [
 // Recent records read as relative time; older ones as a date. The exact time
 // stays in the tooltip.
 export function RelativeTime({ value }: { value: string }) {
+	const [now] = useState(Date.now);
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return <span>{value}</span>;
-	const elapsed = Date.now() - date.getTime();
+	const elapsed = now - date.getTime();
 	let label = formatDay(value);
 	if (elapsed < 60_000) label = "Just now";
 	else if (elapsed < 7 * 86_400_000) {
@@ -558,7 +549,7 @@ export function Pagination({
 					onClick={previous}
 				>
 					<Icon name="chevronRight" size="sm" className="rotate-180" />
-					Previous
+					Previous page
 				</Button>
 				<Button
 					variant="secondary"
@@ -566,7 +557,7 @@ export function Pagination({
 					disabled={!nextCursor}
 					onClick={() => nextCursor && next(nextCursor)}
 				>
-					Next
+					Next page
 					<Icon name="chevronRight" size="sm" />
 				</Button>
 			</div>
@@ -588,10 +579,10 @@ export function CopyCommand({
 		<div className="grid gap-1.5">
 			<p className="m-0 text-xs font-medium text-fg-2">{label}</p>
 			<div className="flex min-w-0 items-center gap-3 rounded-lg border border-line-strong bg-canvas py-1.5 pr-1.5 pl-4">
-				<code className="min-w-0 flex-1 overflow-x-auto font-mono text-sm whitespace-nowrap text-fg">
-					<span aria-hidden="true" className="text-fg-4">
-						${" "}
-					</span>
+				<span aria-hidden="true" className="font-mono text-sm text-fg-4">
+					$
+				</span>
+				<code className="-ml-1.5 min-w-0 flex-1 overflow-x-auto font-mono text-sm whitespace-nowrap text-fg">
 					{command}
 				</code>
 				<Button
@@ -618,7 +609,8 @@ export function CopyCommand({
 	);
 }
 
-// A ⋯ menu for rare and destructive actions, closed by Escape or a click away.
+// A ⋯ menu for rare and destructive actions, closed by choosing an item,
+// Escape or a click away.
 export function OverflowMenu({
 	label,
 	children,
@@ -628,9 +620,6 @@ export function OverflowMenu({
 }) {
 	const details = useRef<HTMLDetailsElement>(null);
 	const [open, setOpen] = useState(false);
-	const close = () => {
-		if (details.current) details.current.open = false;
-	};
 	useEffect(() => {
 		if (!open) return;
 		details.current
@@ -641,11 +630,11 @@ export function OverflowMenu({
 				event.target instanceof Node &&
 				!details.current?.contains(event.target)
 			)
-				close();
+				setOpen(false);
 		};
 		const escape = (event: KeyboardEvent) => {
 			if (event.key !== "Escape") return;
-			close();
+			setOpen(false);
 			details.current?.querySelector<HTMLElement>("summary")?.focus();
 		};
 		document.addEventListener("pointerdown", outside);
@@ -658,10 +647,12 @@ export function OverflowMenu({
 	return (
 		<details
 			ref={details}
+			open={open}
 			className="relative"
 			onToggle={(event) => setOpen(event.currentTarget.open)}
 		>
 			<summary
+				role="button"
 				aria-label={label}
 				aria-haspopup="menu"
 				aria-expanded={open}
@@ -678,7 +669,7 @@ export function OverflowMenu({
 					" absolute top-full right-0 z-30 mt-1 grid w-52 gap-0.5"
 				}
 			>
-				{children(close)}
+				{children(() => setOpen(false))}
 			</div>
 		</details>
 	);

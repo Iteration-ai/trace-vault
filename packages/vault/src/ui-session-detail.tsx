@@ -135,7 +135,7 @@ function RawEvent({ events }: { events: readonly TraceRecord[] }) {
 					<pre
 						className={codeBlockClass + " max-h-96 bg-surface"}
 						tabIndex={0}
-						aria-label={`Complete ${traceEventLabel(event.eventType).toLowerCase()} JSON`}
+						aria-label="Complete event JSON"
 					>
 						{JSON.stringify(event, null, 2)}
 					</pre>
@@ -269,18 +269,26 @@ function Message({
 	);
 }
 
-function Step({ call, result }: { call?: TraceRecord; result?: TraceRecord }) {
-	const [open, setOpen] = useState(false);
-	const first = (call ?? result)!;
-	const name =
-		(call && toolName(call.payload)) ??
-		(result && toolName(result.payload)) ??
-		(call ? "Tool call" : "Tool result");
+function stepSummary(call?: TraceRecord, result?: TraceRecord) {
 	const argument = call
 		? toolArgument(call.payload, call.callId ?? null)
 		: null;
 	const output = result ? eventText(result.payload) : null;
-	const detail = argument ?? output?.split("\n")[0] ?? "";
+	return {
+		name:
+			(call && toolName(call.payload)) ??
+			(result && toolName(result.payload)) ??
+			(call ? "Tool call" : "Tool result"),
+		argument,
+		output,
+		detail: argument ?? output?.split("\n")[0] ?? "",
+	};
+}
+
+function Step({ call, result }: { call?: TraceRecord; result?: TraceRecord }) {
+	const [open, setOpen] = useState(false);
+	const first = (call ?? result)!;
+	const { name, argument, output, detail } = stepSummary(call, result);
 	// The full input is repeated below only when the row had to cut it off.
 	const preview = useRef<HTMLSpanElement>(null);
 	const [cut, setCut] = useState(false);
@@ -429,8 +437,11 @@ export function SessionDetail({
 	}, [focus]);
 	const items = resource.data ? timeline(resource.data.items) : [];
 	const details: [string, ReactNode, boolean?][] = [
-		["Source", <SourceMark source={session.source} />],
-		["Contributor", <Person name={session.contributorName} />],
+		["Source", <SourceMark key="source" source={session.source} />],
+		[
+			"Contributor",
+			<Person key="contributor" name={session.contributorName} />,
+		],
 		["Repository", session.repository, true],
 		["Working directory", session.cwd, true],
 		["Source session", session.sourceSessionId, true],
