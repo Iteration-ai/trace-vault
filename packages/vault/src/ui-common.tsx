@@ -456,14 +456,17 @@ export function sourceLabel(source: string): string {
 	return known.success ? collectorSourceLabel(known.data) : source;
 }
 
-export function SourceMark({ source }: { source: string }) {
+// The harness reads by its logo alone; its name stays in the tooltip and for
+// screen readers.
+export function HarnessLogo({ source }: { source: string }) {
 	const known = sourceSchema.safeParse(source);
+	const label = sourceLabel(source);
+	if (!known.success)
+		return <span className="truncate text-xs text-fg-3">{label}</span>;
 	return (
-		<span className="inline-flex min-w-0 items-center gap-1.5">
-			{known.success && (
-				<ToolLogo name={known.data} className="size-3.5 shrink-0 text-fg" />
-			)}
-			<span className="truncate">{sourceLabel(source)}</span>
+		<span className="inline-flex shrink-0 align-middle" title={label}>
+			<ToolLogo name={known.data} className="size-4 text-fg" />
+			<span className="sr-only">{label}</span>
 		</span>
 	);
 }
