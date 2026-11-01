@@ -93,6 +93,7 @@ page shows these commands with your vault's address filled in.
 ## How it works
 
 ```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#ffffff", "primaryBorderColor": "#b8bac0", "primaryTextColor": "#111113", "lineColor": "#8b8e96", "edgeLabelBackground": "#ffffff", "fontSize": "14px"}}}%%
 flowchart LR
   agents["Claude Code · Codex · Cursor<br/>local transcripts"] --> collector["trace-vault collector<br/>applies your rules"]
   collector -- "approved sessions" --> server["Trace Vault server"]
