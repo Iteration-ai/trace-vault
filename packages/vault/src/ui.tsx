@@ -576,20 +576,17 @@ const navigationGroups: {
 	},
 ];
 
+// One navigation serves both layouts: underlined tabs under the header on
+// narrow screens and a sidebar list from the large breakpoint.
 const navigationLinkClasses = {
-	sidebarActive:
-		"group flex h-8 w-full items-center gap-2.5 rounded-md bg-selected px-2.5 text-sm font-medium text-fg focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent",
-	sidebarIdle:
-		"group flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-sm text-fg-2 transition-colors hover:bg-hover hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent",
-	mobileActive:
-		"flex h-11 shrink-0 items-center gap-1.5 border-b-2 border-accent px-2 text-sm font-medium whitespace-nowrap text-fg focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent",
-	mobileIdle:
-		"flex h-11 shrink-0 items-center gap-1.5 border-b-2 border-transparent px-2 text-sm whitespace-nowrap text-fg-3 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent",
+	active:
+		"group flex h-11 shrink-0 items-center gap-1.5 border-b-2 border-accent px-2 text-sm font-medium whitespace-nowrap text-fg focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent lg:h-8 lg:w-full lg:gap-2.5 lg:rounded-md lg:border-b-0 lg:bg-selected lg:px-2.5",
+	idle: "group flex h-11 shrink-0 items-center gap-1.5 border-b-2 border-transparent px-2 text-sm whitespace-nowrap text-fg-3 transition-colors hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent lg:h-8 lg:w-full lg:gap-2.5 lg:rounded-md lg:border-b-0 lg:px-2.5 lg:text-fg-2 lg:hover:bg-hover",
 } as const;
 
 const navigationIconClasses = {
-	active: "text-fg",
-	idle: "text-fg-3 transition-colors group-hover:text-fg-2",
+	active: "hidden text-fg sm:block",
+	idle: "hidden text-fg-3 transition-colors group-hover:text-fg-2 sm:block",
 } as const;
 
 // Settings pages stay at a readable width; collections use the full width.
@@ -615,32 +612,26 @@ function Navigation({
 	member,
 	view,
 	onSelect,
-	mobile = false,
 }: {
 	member: Member;
 	view: View;
 	onSelect: (view: View) => void;
-	mobile?: boolean;
 }) {
 	return (
 		<nav
 			aria-label="Vault navigation"
-			className={
-				mobile
-					? "flex gap-1 overflow-x-auto border-b border-line-subtle px-2 sm:gap-2 sm:px-3 lg:hidden"
-					: "mx-3 hidden flex-1 flex-col lg:flex"
-			}
+			className="order-last flex basis-full gap-1 overflow-x-auto border-t border-line-subtle px-2 sm:gap-2 sm:px-3 lg:order-none lg:mx-3 lg:mt-1 lg:min-h-0 lg:flex-1 lg:basis-auto lg:flex-col lg:gap-0 lg:overflow-y-auto lg:border-t-0 lg:px-0"
 		>
 			{navigationGroups
 				.filter((group) => !group.admin || member.role === "admin")
 				.map((group) => (
 					<Fragment key={group.label ?? "archive"}>
-						{group.label !== null && !mobile && (
-							<p className="m-0 mt-5 mb-1 px-2.5 text-xs font-medium text-fg-3">
+						{group.label !== null && (
+							<p className="m-0 mt-5 mb-1 hidden px-2.5 text-xs font-medium text-fg-3 lg:block">
 								{group.label}
 							</p>
 						)}
-						<div className={mobile ? "contents" : "grid gap-0.5"}>
+						<div className="contents lg:grid lg:gap-0.5">
 							{group.items.map((item) => {
 								const active = view === item.view;
 								return (
@@ -649,27 +640,21 @@ function Navigation({
 										type="button"
 										aria-current={active ? "page" : undefined}
 										className={
-											mobile
-												? active
-													? navigationLinkClasses.mobileActive
-													: navigationLinkClasses.mobileIdle
-												: active
-													? navigationLinkClasses.sidebarActive
-													: navigationLinkClasses.sidebarIdle
+											active
+												? navigationLinkClasses.active
+												: navigationLinkClasses.idle
 										}
 										onClick={() => onSelect(item.view)}
 									>
-										<span className={mobile ? "hidden sm:block" : "contents"}>
-											<Icon
-												className={
-													active
-														? navigationIconClasses.active
-														: navigationIconClasses.idle
-												}
-												name={item.icon}
-												size="sm"
-											/>
-										</span>
+										<Icon
+											className={
+												active
+													? navigationIconClasses.active
+													: navigationIconClasses.idle
+											}
+											name={item.icon}
+											size="sm"
+										/>
 										{item.label}
 									</button>
 								);
@@ -681,13 +666,12 @@ function Navigation({
 	);
 }
 
+// Compact in the narrow header, a full account row at the sidebar's foot.
 function AccountMenu({
 	member,
-	compact = false,
 	onSignedOut,
 }: {
 	member: Member;
-	compact?: boolean;
 	onSignedOut: () => void;
 }) {
 	const details = useRef<HTMLDetailsElement>(null);
@@ -699,19 +683,16 @@ function AccountMenu({
 		details.current
 			?.querySelector<HTMLButtonElement>('[role="menuitem"]')
 			?.focus();
-		const close = () => {
-			if (details.current) details.current.open = false;
-		};
 		const outside = (event: PointerEvent) => {
 			if (
 				event.target instanceof Node &&
 				!details.current?.contains(event.target)
 			)
-				close();
+				setOpen(false);
 		};
 		const escape = (event: KeyboardEvent) => {
 			if (event.key !== "Escape") return;
-			close();
+			setOpen(false);
 			details.current?.querySelector<HTMLElement>("summary")?.focus();
 		};
 		document.addEventListener("pointerdown", outside);
@@ -724,42 +705,38 @@ function AccountMenu({
 	return (
 		<details
 			ref={details}
+			open={open}
 			className="relative min-w-0"
 			onToggle={(event) => setOpen(event.currentTarget.open)}
 		>
 			<summary
+				role="button"
 				aria-label={`Account: ${name}`}
 				aria-haspopup="menu"
 				aria-expanded={open}
-				className={
-					compact
-						? "grid size-8 cursor-pointer list-none place-items-center rounded-md transition-colors hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden"
-						: "flex min-h-12 cursor-pointer list-none items-center gap-2.5 rounded-md px-2 py-2 transition-colors hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent [&::-webkit-details-marker]:hidden"
-				}
+				className="flex cursor-pointer list-none items-center gap-2.5 rounded-md p-0.5 transition-colors hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent lg:min-h-12 lg:px-2 lg:py-2 lg:focus-visible:outline-offset-[-2px] [&::-webkit-details-marker]:hidden"
 			>
 				<Avatar name={name} size="md" />
-				{!compact && (
-					<>
-						<span className="min-w-0 flex-1 text-left">
-							<span className="block truncate text-sm font-medium text-fg">
-								{name}
-							</span>
-							<span className="block truncate text-xs text-fg-3">
-								{member.email}
-							</span>
-						</span>
-						<Icon className="text-fg-3" name="chevronsUpDown" size="sm" />
-					</>
-				)}
+				<span className="hidden min-w-0 flex-1 text-left lg:block">
+					<span className="block truncate text-sm font-medium text-fg">
+						{name}
+					</span>
+					<span className="block truncate text-xs text-fg-3">
+						{member.email}
+					</span>
+				</span>
+				<Icon
+					className="hidden text-fg-3 lg:block"
+					name="chevronsUpDown"
+					size="sm"
+				/>
 			</summary>
 			<div
 				role="menu"
 				aria-label="Your account"
 				className={
 					popoverClasses.menu +
-					(compact
-						? " absolute top-full right-0 z-30 mt-2 grid w-60 gap-0.5"
-						: " absolute bottom-full left-0 z-30 mb-2 grid w-56 gap-0.5")
+					" absolute top-full right-0 z-30 mt-2 grid w-60 gap-0.5 lg:top-auto lg:right-auto lg:bottom-full lg:left-0 lg:mt-0 lg:mb-2 lg:w-56"
 				}
 			>
 				<div className="mb-1 grid gap-1 border-b border-line-subtle px-2.5 pt-1.5 pb-2.5">
@@ -806,76 +783,66 @@ function Workspace({
 	useEffect(() => {
 		main.current?.focus();
 	}, [view]);
-	const vaultIdentity = (
-		<span className="flex min-w-0 items-center gap-2.5">
-			<span
-				aria-hidden="true"
-				className="grid size-6 shrink-0 place-items-center rounded-md bg-primary text-xs font-semibold text-primary-fg"
-			>
-				{vaultMonogram(vaultName)}
-			</span>
-			<span
-				className="min-w-0 flex-1 truncate text-sm font-medium text-fg"
-				title={vaultName}
-			>
-				{vaultName}
-			</span>
-		</span>
-	);
 	return (
-		<div className="flex min-h-screen bg-canvas text-fg">
+		<div className="flex min-h-screen flex-col bg-canvas text-fg lg:flex-row">
 			<a
 				href="#vault-content"
 				className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-fg"
 			>
 				Skip to content
 			</a>
-			<aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-canvas lg:flex">
-				<div className="flex h-14 shrink-0 items-center px-5">
-					<Lockup />
+			<aside className="sticky top-0 z-20 flex shrink-0 flex-wrap items-center border-b border-line bg-canvas/95 backdrop-blur-md lg:h-screen lg:w-60 lg:flex-col lg:flex-nowrap lg:items-stretch lg:border-r lg:border-b-0 lg:bg-canvas lg:backdrop-blur-none">
+				<div className="flex h-14 min-w-0 flex-1 items-center gap-3 pl-4 sm:pl-6 lg:h-auto lg:flex-none lg:flex-col lg:items-stretch lg:gap-0 lg:pl-0">
+					<span className="flex shrink-0 items-center gap-2 text-fg lg:h-14 lg:px-5">
+						<BrandMark />
+						<span className="hidden text-md font-semibold lg:inline">
+							Trace Vault
+						</span>
+					</span>
+					<span className="flex min-w-0 flex-1 items-center gap-2.5 lg:mx-3 lg:h-10 lg:flex-none lg:px-2">
+						<span
+							aria-hidden="true"
+							className="grid size-6 shrink-0 place-items-center rounded-md bg-primary text-xs font-semibold text-primary-fg"
+						>
+							{vaultMonogram(vaultName)}
+						</span>
+						<span
+							className="min-w-0 flex-1 truncate text-sm font-medium text-fg"
+							title={vaultName}
+						>
+							{vaultName}
+						</span>
+					</span>
 				</div>
-				<div className="mx-3 flex h-10 min-w-0 items-center px-2">
-					{vaultIdentity}
-				</div>
-				<div className="mt-1 flex min-h-0 flex-1 flex-col overflow-y-auto">
-					<Navigation member={member} view={view} onSelect={setView} />
-				</div>
-				<div className="mx-3 mt-2 border-t border-line-subtle py-2">
+				<Navigation member={member} view={view} onSelect={setView} />
+				<div className="px-4 sm:px-6 lg:order-last lg:mx-3 lg:mt-2 lg:border-t lg:border-line-subtle lg:px-0 lg:py-2">
 					<AccountMenu member={member} onSignedOut={onSignedOut} />
 				</div>
 			</aside>
-			<div className="flex min-w-0 flex-1 flex-col bg-canvas">
-				<header className="sticky top-0 z-20 flex min-h-14 shrink-0 items-center gap-3 border-b border-line bg-canvas/95 px-4 py-2 backdrop-blur-md sm:px-6 lg:hidden">
-					<BrandMark />
-					<div className="min-w-0 flex-1">{vaultIdentity}</div>
-					<AccountMenu member={member} compact onSignedOut={onSignedOut} />
-				</header>
-				<Navigation member={member} view={view} onSelect={setView} mobile />
-				<main
-					ref={main}
-					id="vault-content"
-					tabIndex={-1}
-					className="flex-1 px-4 pt-6 pb-12 outline-none sm:px-6 lg:px-10 lg:pt-8"
-				>
-					<div className={viewWidthClasses[view]}>
-						{view === "sessions" && (
-							<Sessions
-								member={member}
-								onCollectors={() => setView("collectors")}
-							/>
-						)}
-						{view === "rules" && <CaptureRules />}
-						{view === "collectors" && (
-							<Collectors onRules={() => setView("rules")} />
-						)}
-						{view === "repositories" && member.role === "admin" && (
-							<RepositoryPolicy />
-						)}
-						{view === "people" && member.role === "admin" && <People />}
-						{view === "audit" && member.role === "admin" && <Audit />}
-					</div>
-				</main>
-			</div>
+			<main
+				ref={main}
+				id="vault-content"
+				tabIndex={-1}
+				className="min-w-0 flex-1 px-4 pt-6 pb-12 outline-none sm:px-6 lg:px-10 lg:pt-8"
+			>
+				<div className={viewWidthClasses[view]}>
+					{view === "sessions" && (
+						<Sessions
+							member={member}
+							onCollectors={() => setView("collectors")}
+						/>
+					)}
+					{view === "rules" && <CaptureRules />}
+					{view === "collectors" && (
+						<Collectors onRules={() => setView("rules")} />
+					)}
+					{view === "repositories" && member.role === "admin" && (
+						<RepositoryPolicy />
+					)}
+					{view === "people" && member.role === "admin" && <People />}
+					{view === "audit" && member.role === "admin" && <Audit />}
+				</div>
+			</main>
 		</div>
 	);
 }

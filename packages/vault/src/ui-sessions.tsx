@@ -10,7 +10,6 @@ import {
 	ResourceState,
 	SourceMark,
 	pageSchema,
-	sourceLabel,
 	tableFrameClass,
 	usePage,
 	useResource,
@@ -45,7 +44,7 @@ const sessionHeaderClass =
 	"hidden h-9 items-center gap-4 border-b border-line px-4 text-xs font-medium text-fg-3 lg:grid";
 
 const sessionRowClass =
-	"group grid w-full min-w-0 gap-x-4 gap-y-1 px-4 py-2.5 text-left text-fg-2 transition-colors hover:bg-hover focus-visible:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent sm:grid-cols-[minmax(0,1fr)_auto] lg:items-center";
+	"group grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-2.5 text-left text-fg-2 transition-colors hover:bg-hover focus-visible:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent";
 
 export function Sessions({
 	member,
@@ -226,10 +225,10 @@ function SessionRow({
 			type="button"
 			data-session-id={session.id}
 			className={sessionRowClass + " " + columns}
-			aria-label={`Open session ${title}, ${sourceLabel(session.source)}, ${session.contributorName || "unnamed contributor"}, ${session.eventCount} events`}
+			aria-label={`Open session ${title}, ${session.id.slice(0, 8)}, ${session.sourceSessionId}, ${session.contributorName}`}
 			onClick={onOpen}
 		>
-			<span className="min-w-0">
+			<span className="col-span-2 min-w-0 lg:col-span-1">
 				<span
 					className={
 						session.title
@@ -252,7 +251,7 @@ function SessionRow({
 					)}
 				</span>
 			</span>
-			<span className="hidden min-w-0 lg:block">
+			<span className="min-w-0">
 				<SessionLocation repository={session.repository} cwd={session.cwd} />
 			</span>
 			{admin && (
@@ -263,13 +262,8 @@ function SessionRow({
 			<span className="hidden text-right text-xs text-fg-3 tabular-nums lg:block">
 				{session.eventCount.toLocaleString()}
 			</span>
-			<span className="flex min-w-0 items-center justify-between gap-3 text-xs text-fg-3 tabular-nums sm:justify-end lg:justify-start">
-				<span className="min-w-0 lg:hidden">
-					<SessionLocation repository={session.repository} cwd={session.cwd} />
-				</span>
-				<span className="shrink-0">
-					<RelativeTime value={session.lastReceivedAt} />
-				</span>
+			<span className="text-right text-xs text-fg-3 tabular-nums lg:text-left">
+				<RelativeTime value={session.lastReceivedAt} />
 			</span>
 		</button>
 	);

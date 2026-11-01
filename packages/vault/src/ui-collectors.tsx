@@ -21,6 +21,7 @@ import {
 	formatTime,
 	pageSchema,
 	segmentedGroupClass,
+	sourceLabel,
 	segmentedItemClasses,
 	tableBodyClass,
 	tableClasses,
@@ -57,7 +58,8 @@ export function Collectors({ onRules }: { onRules: () => void }) {
 	const resource = useResource(`/api/devices${page.query}`, devicesSchema);
 	const action = useAction();
 	const [setup, setSetup] = useState<boolean | null>(null);
-	const [confirming, setConfirming] = useState<string>();
+	const [selected, setSelected] = useState<string>();
+	const [confirming, setConfirming] = useState(false);
 	const [actionTarget, setActionTarget] = useState<string>();
 	const feedback = useRef<HTMLDivElement>(null);
 	const empty =
@@ -65,6 +67,10 @@ export function Collectors({ onRules }: { onRules: () => void }) {
 		resource.data?.items.length === 0 &&
 		!resource.data.nextCursor;
 	const setupOpen = setup ?? empty;
+	function leavePage() {
+		setSelected(undefined);
+		setConfirming(false);
+	}
 	return (
 		<>
 			<PageHeader
@@ -146,9 +152,6 @@ export function Collectors({ onRules }: { onRules: () => void }) {
 										<th scope="col" className={tableHeaderCellClass + " w-28"}>
 											Access
 										</th>
-										<th scope="col" className={tableHeaderCellClass + " w-24"}>
-											<span className="sr-only">Actions</span>
-										</th>
 									</tr>
 								</thead>
 								<tbody className={tableBodyClass}>
@@ -156,22 +159,25 @@ export function Collectors({ onRules }: { onRules: () => void }) {
 										<Fragment key={device.id}>
 											<DeviceRow
 												device={device}
-												confirming={confirming === device.id}
+												open={selected === device.id}
 												disabled={action.pending}
-												onRevoke={() =>
-													setConfirming(
-														confirming === device.id ? undefined : device.id,
-													)
-												}
+												onToggle={() => {
+													setSelected(
+														selected === device.id ? undefined : device.id,
+													);
+													setConfirming(false);
+												}}
 											/>
-											{confirming === device.id && (
-												<tr>
-													<td colSpan={6} className="p-0">
-														<form
-															id={`revoke-${device.id}`}
-															className="grid gap-2 border-t border-err/20 bg-err/5 px-4 py-3"
-															onSubmit={(event) => {
-																event.preventDefault();
+											{selected === device.id && (
+												<tr className="bg-surface">
+													<td colSpan={5} className="px-4 py-3 sm:pl-10">
+														<DeviceDetails
+															device={device}
+															confirming={confirming}
+															action={action}
+															actionTarget={actionTarget}
+															onConfirm={setConfirming}
+															onRevoke={() => {
 																setActionTarget(device.id);
 																void action.run(
 																	async () => {
@@ -180,54 +186,14 @@ export function Collectors({ onRules }: { onRules: () => void }) {
 																			emptySchema,
 																			{ method: "DELETE" },
 																		);
-																		setConfirming(undefined);
+																		setConfirming(false);
 																		feedback.current?.focus();
 																		resource.refresh();
 																	},
 																	`${device.name || "Collector"} revoked. Its sessions stay in the vault.`,
 																);
 															}}
-														>
-															<p className="m-0 text-sm font-medium">
-																Revoke {device.name || "this collector"}?
-															</p>
-															<p className="m-0 max-w-[70ch] text-sm text-fg-2">
-																It can no longer send activity; collecting again
-																needs a new enrollment. Sessions it already sent
-																stay in the vault.
-															</p>
-															<Feedback
-																action={{
-																	...action,
-																	success: undefined,
-																	error:
-																		actionTarget === device.id
-																			? action.error
-																			: undefined,
-																}}
-															/>
-															<div className="flex flex-wrap gap-2">
-																<Button
-																	variant="danger"
-																	size="sm"
-																	type="submit"
-																	disabled={action.pending}
-																	autoFocus
-																>
-																	{action.pending
-																		? "Revoking…"
-																		: "Revoke collector"}
-																</Button>
-																<Button
-																	variant="ghost"
-																	size="sm"
-																	disabled={action.pending}
-																	onClick={() => setConfirming(undefined)}
-																>
-																	Cancel
-																</Button>
-															</div>
-														</form>
+														/>
 													</td>
 												</tr>
 											)}
@@ -252,22 +218,16 @@ export function Collectors({ onRules }: { onRules: () => void }) {
 							{...page}
 							nextCursor={resource.data.nextCursor}
 							previous={() => {
-								setConfirming(undefined);
+								leavePage();
 								page.previous();
 							}}
 							next={(cursor) => {
-								setConfirming(undefined);
+								leavePage();
 								page.next(cursor);
 							}}
 						/>
 					</fieldset>
 				</>
-			)}
-			{!!resource.data?.items.length && (
-				<p className="mt-4 text-xs text-fg-3">
-					Enrollment grants permission to send activity; it does not show
-					whether a collector is running.
-				</p>
 			)}
 		</>
 	);
@@ -275,44 +235,56 @@ export function Collectors({ onRules }: { onRules: () => void }) {
 
 function DeviceRow({
 	device,
-	confirming,
+	open,
 	disabled,
-	onRevoke,
+	onToggle,
 }: {
 	device: Device;
-	confirming: boolean;
+	open: boolean;
 	disabled: boolean;
-	onRevoke: () => void;
+	onToggle: () => void;
 }) {
+	const name = device.name || "Unnamed collector";
 	return (
-		<tr className={confirming ? "bg-hover" : "hover:bg-hover"}>
-			<td className={tableDenseCellClass + " h-12"}>
-				<div className="min-w-0">
-					<p
-						className="m-0 truncate font-medium text-fg"
-						title={device.name || "Unnamed collector"}
-					>
-						{device.name || "Unnamed collector"}
-					</p>
-					<p
-						className="m-0 truncate font-mono text-2xs text-fg-3"
-						title={`Collector ID ${device.id}`}
-					>
-						{device.id.slice(0, 8)}
-						<span className="font-sans md:hidden">
-							{" · "}
-							<SourceMark source={device.source} />
+		<tr className={open ? "bg-hover" : "hover:bg-hover"}>
+			<td className="h-12 min-w-0 px-1.5 py-0 align-middle">
+				<Button
+					variant="ghost"
+					className="h-10 w-full min-w-0 justify-start text-left hover:bg-transparent"
+					disabled={disabled}
+					aria-expanded={open}
+					aria-controls={open ? `collector-${device.id}` : undefined}
+					aria-label={`Details for ${name} (${device.id})`}
+					onClick={onToggle}
+				>
+					<Icon
+						name="chevronRight"
+						size="xs"
+						className={
+							open
+								? "rotate-90 text-fg-3 transition-transform"
+								: "text-fg-4 transition-transform"
+						}
+					/>
+					<span className="min-w-0">
+						<span className="block truncate font-medium text-fg" title={name}>
+							{name}
 						</span>
-					</p>
-				</div>
+						<span className="block truncate font-mono text-2xs font-normal text-fg-3">
+							{device.id.slice(0, 8)}
+							<span className="font-sans md:hidden">
+								{" · "}
+								{sourceLabel(device.source)}
+							</span>
+						</span>
+					</span>
+				</Button>
 			</td>
 			<td className={tableDenseCellClass + " hidden text-fg-2 md:table-cell"}>
 				<SourceMark source={device.source} />
 			</td>
 			<td className={tableDenseCellClass + " hidden lg:table-cell"}>
-				<span title={`Member ID ${device.memberId}`}>
-					<Person name={device.memberName} />
-				</span>
+				<Person name={device.memberName} />
 			</td>
 			<td className={tableDenseCellClass + " hidden text-fg-3 sm:table-cell"}>
 				<time dateTime={device.createdAt} title={formatTime(device.createdAt)}>
@@ -324,22 +296,121 @@ function DeviceRow({
 					{device.revoked ? "Revoked" : "Enrolled"}
 				</StatusText>
 			</td>
-			<td className={tableDenseCellClass + " text-right"}>
-				{!device.revoked && (
-					<Button
-						variant="ghost"
-						size="sm"
-						disabled={disabled}
-						aria-expanded={confirming}
-						aria-controls={confirming ? `revoke-${device.id}` : undefined}
-						aria-label={`Revoke ${device.name || "unnamed collector"} (${device.id})`}
-						onClick={onRevoke}
-					>
-						Revoke
-					</Button>
-				)}
-			</td>
 		</tr>
+	);
+}
+
+function DeviceDetails({
+	device,
+	confirming,
+	action,
+	actionTarget,
+	onConfirm,
+	onRevoke,
+}: {
+	device: Device;
+	confirming: boolean;
+	action: ReturnType<typeof useAction>;
+	actionTarget?: string;
+	onConfirm: (confirming: boolean) => void;
+	onRevoke: () => void;
+}) {
+	const revoke = `collector-revoke-${device.id}`;
+	const cancel = `collector-revoke-cancel-${device.id}`;
+	return (
+		<section
+			id={`collector-${device.id}`}
+			aria-label="Collector details"
+			className="grid gap-3 text-sm"
+		>
+			<dl className="m-0 grid min-w-0 gap-x-6 gap-y-1.5 text-xs sm:grid-cols-[8rem_minmax(0,1fr)]">
+				<dt className="text-fg-3">Collector ID</dt>
+				<dd className="m-0 min-w-0 font-mono break-all text-fg-2">
+					{device.id}
+				</dd>
+				<dt className="text-fg-3">Owner</dt>
+				<dd className="m-0 min-w-0 break-all text-fg-2">
+					{device.memberName || "Unnamed member"}
+					<span className="mt-0.5 block font-mono text-fg-3">
+						{device.memberId}
+					</span>
+				</dd>
+				<dt className="text-fg-3">Source</dt>
+				<dd className="m-0 min-w-0 text-fg-2">{sourceLabel(device.source)}</dd>
+				<dt className="text-fg-3">Enrolled</dt>
+				<dd className="m-0 min-w-0 text-fg-2">
+					{formatTime(device.createdAt)}
+				</dd>
+			</dl>
+			<p className="m-0 text-xs text-fg-3">
+				{device.revoked
+					? "Access revoked. Existing company traces are retained."
+					: "Enrollment grants permission to send activity; it does not show whether a collector is running."}
+			</p>
+			{!device.revoked &&
+				(confirming ? (
+					<form
+						className="grid gap-2 rounded-lg border border-err/30 bg-err/5 p-3"
+						onSubmit={(event) => {
+							event.preventDefault();
+							onRevoke();
+						}}
+					>
+						<p className="m-0 font-medium">Revoke this collector?</p>
+						<p className="m-0 max-w-[70ch] text-fg-2">
+							It can no longer send activity; collecting again needs a new
+							enrollment. Sessions it already sent stay in the vault.
+						</p>
+						<Feedback
+							action={{
+								...action,
+								success: undefined,
+								error: actionTarget === device.id ? action.error : undefined,
+							}}
+						/>
+						<div className="flex flex-wrap gap-2">
+							<Button
+								variant="danger"
+								size="sm"
+								type="submit"
+								disabled={action.pending}
+							>
+								{action.pending ? "Revoking…" : "Confirm revoke collector"}
+							</Button>
+							<Button
+								id={cancel}
+								variant="ghost"
+								size="sm"
+								disabled={action.pending}
+								onClick={() => {
+									onConfirm(false);
+									requestAnimationFrame(() =>
+										document.getElementById(revoke)?.focus(),
+									);
+								}}
+							>
+								Cancel
+							</Button>
+						</div>
+					</form>
+				) : (
+					<div>
+						<Button
+							id={revoke}
+							variant="danger"
+							size="sm"
+							onClick={() => {
+								onConfirm(true);
+								requestAnimationFrame(() =>
+									document.getElementById(cancel)?.focus(),
+								);
+							}}
+						>
+							Revoke collector
+						</Button>
+					</div>
+				))}
+		</section>
 	);
 }
 

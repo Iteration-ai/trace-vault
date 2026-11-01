@@ -5,6 +5,11 @@ const brandMarkClasses = {
 	md: "size-6 shrink-0",
 } as const satisfies Record<BrandSize, string>;
 
+const brandMarkPixels = {
+	sm: 20,
+	md: 24,
+} as const satisfies Record<BrandSize, number>;
+
 type Dot = Readonly<{ x: number; y: number; radius: number }>;
 
 const lightLength = Math.hypot(-0.4, -0.48, 0.78);
@@ -53,7 +58,9 @@ export function BrandMark({ size = "md" }: Readonly<{ size?: BrandSize }>) {
 			aria-hidden="true"
 			className={brandMarkClasses[size]}
 			fill="currentColor"
+			height={brandMarkPixels[size]}
 			viewBox="0 0 100 100"
+			width={brandMarkPixels[size]}
 		>
 			{markDots.map((dot) => (
 				<circle

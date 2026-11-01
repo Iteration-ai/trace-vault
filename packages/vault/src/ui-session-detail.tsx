@@ -135,7 +135,7 @@ function RawEvent({ events }: { events: readonly TraceRecord[] }) {
 					<pre
 						className={codeBlockClass + " max-h-96 bg-surface"}
 						tabIndex={0}
-						aria-label={`Complete ${traceEventLabel(event.eventType).toLowerCase()} JSON`}
+						aria-label="Complete event JSON"
 					>
 						{JSON.stringify(event, null, 2)}
 					</pre>

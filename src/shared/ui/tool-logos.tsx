@@ -19,7 +19,9 @@ export function ToolLogo({
 			aria-hidden="true"
 			className={className}
 			fill="currentColor"
+			height="14"
 			viewBox="0 0 24 24"
+			width="14"
 		>
 			<path d={toolLogoPaths[name]} />
 		</svg>

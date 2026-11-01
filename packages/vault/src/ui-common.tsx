@@ -549,7 +549,7 @@ export function Pagination({
 					onClick={previous}
 				>
 					<Icon name="chevronRight" size="sm" className="rotate-180" />
-					Previous
+					Previous page
 				</Button>
 				<Button
 					variant="secondary"
@@ -557,7 +557,7 @@ export function Pagination({
 					disabled={!nextCursor}
 					onClick={() => nextCursor && next(nextCursor)}
 				>
-					Next
+					Next page
 					<Icon name="chevronRight" size="sm" />
 				</Button>
 			</div>
@@ -579,10 +579,10 @@ export function CopyCommand({
 		<div className="grid gap-1.5">
 			<p className="m-0 text-xs font-medium text-fg-2">{label}</p>
 			<div className="flex min-w-0 items-center gap-3 rounded-lg border border-line-strong bg-canvas py-1.5 pr-1.5 pl-4">
-				<code className="min-w-0 flex-1 overflow-x-auto font-mono text-sm whitespace-nowrap text-fg">
-					<span aria-hidden="true" className="text-fg-4">
-						${" "}
-					</span>
+				<span aria-hidden="true" className="font-mono text-sm text-fg-4">
+					$
+				</span>
+				<code className="-ml-1.5 min-w-0 flex-1 overflow-x-auto font-mono text-sm whitespace-nowrap text-fg">
 					{command}
 				</code>
 				<Button
@@ -652,6 +652,7 @@ export function OverflowMenu({
 			onToggle={(event) => setOpen(event.currentTarget.open)}
 		>
 			<summary
+				role="button"
 				aria-label={label}
 				aria-haspopup="menu"
 				aria-expanded={open}
