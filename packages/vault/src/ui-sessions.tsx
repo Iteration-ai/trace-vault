@@ -8,8 +8,9 @@ import {
 	Person,
 	RelativeTime,
 	ResourceState,
-	SourceMark,
+	HarnessLogo,
 	pageSchema,
+	sourceLabel,
 	tableFrameClass,
 	usePage,
 	useResource,
@@ -34,17 +35,18 @@ export type Session = z.infer<typeof sessionSchema>;
 const sessionsSchema = pageSchema(sessionSchema);
 
 // Admins see every contributor, so their ledger gains a contributor column.
+// Narrow screens keep the title, harness and receipt time.
 const sessionColumnClasses = {
 	admin:
-		"lg:grid-cols-[minmax(0,2.6fr)_minmax(0,1.2fr)_minmax(0,1fr)_72px_104px]",
-	member: "lg:grid-cols-[minmax(0,2.6fr)_minmax(0,1.2fr)_72px_104px]",
+		"lg:grid-cols-[minmax(0,2.6fr)_64px_minmax(0,1.2fr)_minmax(0,1fr)_64px_104px]",
+	member: "lg:grid-cols-[minmax(0,2.6fr)_64px_minmax(0,1.2fr)_64px_104px]",
 } as const;
 
 const sessionHeaderClass =
 	"hidden h-9 items-center gap-4 border-b border-line px-4 text-xs font-medium text-fg-3 lg:grid";
 
 const sessionRowClass =
-	"group grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-2.5 text-left text-fg-2 transition-colors hover:bg-hover focus-visible:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent";
+	"group grid h-11 w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-4 px-4 text-left text-fg-2 transition-colors hover:bg-hover focus-visible:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent";
 
 export function Sessions({
 	member,
@@ -149,6 +151,7 @@ export function Sessions({
 									className={sessionHeaderClass + " " + columns}
 								>
 									<span>Session</span>
+									<span>Harness</span>
 									<span>Location</span>
 									{admin && <span>Contributor</span>}
 									<span className="text-right">Events</span>
@@ -225,33 +228,21 @@ function SessionRow({
 			type="button"
 			data-session-id={session.id}
 			className={sessionRowClass + " " + columns}
-			aria-label={`Open session ${title}, ${session.id.slice(0, 8)}, ${session.sourceSessionId}, ${session.contributorName}`}
+			aria-label={`Open session ${title}, ${sourceLabel(session.source)}, ${session.contributorName || "unnamed contributor"}`}
 			onClick={onOpen}
 		>
-			<span className="col-span-2 min-w-0 lg:col-span-1">
-				<span
-					className={
-						session.title
-							? "block truncate text-sm font-medium text-fg"
-							: "block truncate text-sm text-fg-3"
-					}
-					title={title}
-				>
-					{title}
-				</span>
-				<span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-2xs text-fg-3">
-					<SourceMark source={session.source} />
-					<span aria-hidden="true">·</span>
-					<span className="shrink-0 font-mono">{session.id.slice(0, 8)}</span>
-					{admin && (
-						<span className="min-w-0 truncate lg:hidden">
-							<span aria-hidden="true">· </span>
-							{session.contributorName || "Unnamed"}
-						</span>
-					)}
-				</span>
+			<span
+				className={
+					session.title
+						? "min-w-0 truncate text-sm font-medium text-fg"
+						: "min-w-0 truncate text-sm text-fg-3"
+				}
+				title={title}
+			>
+				{title}
 			</span>
-			<span className="min-w-0">
+			<HarnessLogo source={session.source} />
+			<span className="hidden min-w-0 lg:block">
 				<SessionLocation repository={session.repository} cwd={session.cwd} />
 			</span>
 			{admin && (

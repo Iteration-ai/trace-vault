@@ -46,7 +46,7 @@ account, a cloud service or an LLM API key.
   administrators see everyone's, collectors can be revoked at any time and every
   administrative change is recorded in an audit log.
 
-![A session in the reader: the developer's prompt, the agent's replies and its tool calls, with session details alongside. Synthetic demo data.](docs/images/session.webp)
+![A session in the reader: the developer's prompt, the agent's replies and its tool calls. Synthetic demo data.](docs/images/session.webp)
 
 ## Quickstart
 

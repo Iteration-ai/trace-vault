@@ -11,7 +11,7 @@ import {
 	Pagination,
 	Person,
 	ResourceState,
-	SourceMark,
+	HarnessLogo,
 	StatusText,
 	api,
 	codeBlockClass,
@@ -128,10 +128,10 @@ export function Collectors({ onRules }: { onRules: () => void }) {
 										<th
 											scope="col"
 											className={
-												tableHeaderCellClass + " hidden w-36 md:table-cell"
+												tableHeaderCellClass + " hidden w-24 md:table-cell"
 											}
 										>
-											Source
+											Harness
 										</th>
 										<th
 											scope="col"
@@ -247,14 +247,14 @@ function DeviceRow({
 	const name = device.name || "Unnamed collector";
 	return (
 		<tr className={open ? "bg-hover" : "hover:bg-hover"}>
-			<td className="h-12 min-w-0 px-1.5 py-0 align-middle">
+			<td className="h-11 min-w-0 px-1.5 py-0 align-middle">
 				<Button
 					variant="ghost"
-					className="h-10 w-full min-w-0 justify-start text-left hover:bg-transparent"
+					className="w-full min-w-0 justify-start text-left hover:bg-transparent"
 					disabled={disabled}
 					aria-expanded={open}
 					aria-controls={open ? `collector-${device.id}` : undefined}
-					aria-label={`Details for ${name} (${device.id})`}
+					aria-label={`Details for ${name}, owned by ${device.memberName || "an unnamed member"}`}
 					onClick={onToggle}
 				>
 					<Icon
@@ -266,22 +266,13 @@ function DeviceRow({
 								: "text-fg-4 transition-transform"
 						}
 					/>
-					<span className="min-w-0">
-						<span className="block truncate font-medium text-fg" title={name}>
-							{name}
-						</span>
-						<span className="block truncate font-mono text-2xs font-normal text-fg-3">
-							{device.id.slice(0, 8)}
-							<span className="font-sans md:hidden">
-								{" · "}
-								{sourceLabel(device.source)}
-							</span>
-						</span>
+					<span className="truncate font-medium text-fg" title={name}>
+						{name}
 					</span>
 				</Button>
 			</td>
-			<td className={tableDenseCellClass + " hidden text-fg-2 md:table-cell"}>
-				<SourceMark source={device.source} />
+			<td className={tableDenseCellClass + " hidden md:table-cell"}>
+				<HarnessLogo source={device.source} />
 			</td>
 			<td className={tableDenseCellClass + " hidden lg:table-cell"}>
 				<Person name={device.memberName} />
@@ -335,7 +326,7 @@ function DeviceDetails({
 						{device.memberId}
 					</span>
 				</dd>
-				<dt className="text-fg-3">Source</dt>
+				<dt className="text-fg-3">Harness</dt>
 				<dd className="m-0 min-w-0 text-fg-2">{sourceLabel(device.source)}</dd>
 				<dt className="text-fg-3">Enrolled</dt>
 				<dd className="m-0 min-w-0 text-fg-2">

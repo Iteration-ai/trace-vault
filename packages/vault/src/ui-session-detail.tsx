@@ -1,4 +1,5 @@
 import {
+	Fragment,
 	useEffect,
 	useLayoutEffect,
 	useRef,
@@ -15,10 +16,10 @@ import {
 	OverflowMenu,
 	PageHeader,
 	Pagination,
-	Person,
 	RelativeTime,
 	ResourceState,
-	SourceMark,
+	HarnessLogo,
+	disclosureSummaryClass,
 	buttonClasses,
 	codeBlockClass,
 	formatTime,
@@ -436,28 +437,25 @@ export function SessionDetail({
 		(step ?? heading.current)?.focus({ preventScroll: true });
 	}, [focus]);
 	const items = resource.data ? timeline(resource.data.items) : [];
-	const details: [string, ReactNode, boolean?][] = [
-		["Source", <SourceMark key="source" source={session.source} />],
-		[
-			"Contributor",
-			<Person key="contributor" name={session.contributorName} />,
-		],
-		["Repository", session.repository, true],
-		["Working directory", session.cwd, true],
+	// Identifiers and full paths stay reachable below the conversation.
+	const details: [string, string, boolean?][] = [
+		["Harness", sourceLabel(session.source)],
+		["Contributor", session.contributorName || "Unnamed contributor"],
+		["Repository", session.repository ?? "", true],
+		["Working directory", session.cwd ?? "", true],
 		["Source session", session.sourceSessionId, true],
 		["Vault session", session.id, true],
-		["Events", session.eventCount.toLocaleString()],
 		["Last received", formatTime(session.lastReceivedAt)],
 	];
 	return (
-		<>
+		<div className="mx-auto w-full max-w-4xl">
 			<PageHeader
 				title={session.title || "Untitled session"}
 				headingRef={heading}
 				parents={[{ label: "Sessions", onSelect: () => onBack() }]}
 				description={
 					<span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-						<SourceMark source={session.source} />
+						<HarnessLogo source={session.source} />
 						<span>{session.contributorName || "Unnamed contributor"}</span>
 						{(session.repository || session.cwd) && (
 							<SessionLocation
@@ -550,122 +548,115 @@ export function SessionDetail({
 					/>
 				</div>
 			)}
-			<div className="grid min-w-0 gap-x-10 gap-y-8 lg:grid-cols-[minmax(0,1fr)_17.5rem]">
-				<section aria-labelledby="session-conversation" className="min-w-0">
-					<div className="mb-2 flex items-center justify-between gap-2 border-b border-line-subtle pb-2">
-						<h2
-							id="session-conversation"
-							className="m-0 text-base font-semibold text-fg"
-						>
-							Conversation
-						</h2>
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={resource.refresh}
-							disabled={resource.loading}
-						>
-							Refresh
-						</Button>
-					</div>
-					<ResourceState
-						{...resource}
-						retry={resource.refresh}
-						label="Loading events"
-					/>
-					{resource.data && (
-						<>
-							{items.length ? (
-								<ol
-									aria-label="Session events in source order"
-									className="m-0 grid list-none grid-cols-1 gap-0.5 p-0"
-								>
-									{items.map((item) => (
-										<li
-											key={item.kind === "step" ? item.key : item.event.eventId}
-										>
-											{item.kind === "message" ? (
-												<Message
-													event={item.event}
-													human={item.human}
-													session={session}
-												/>
-											) : item.kind === "step" ? (
-												<Step call={item.call} result={item.result} />
-											) : item.kind === "thought" ? (
-												<CompactRow
-													event={item.event}
-													icon="thought"
-													label="Thinking"
-													summary={eventText(item.event.payload)}
-												>
-													{eventText(item.event.payload) && (
-														<p className="m-0 text-sm leading-relaxed whitespace-pre-wrap text-fg-2">
-															{eventText(item.event.payload)}
-														</p>
-													)}
-												</CompactRow>
-											) : (
-												<CompactRow
-													event={item.event}
-													icon="info"
-													label={traceEventLabel(item.event.eventType)}
-													summary={systemSummary(
-														item.event.eventType,
-														item.event.payload,
-													)}
-												/>
-											)}
-										</li>
-									))}
-								</ol>
-							) : (
-								<EmptyState title="No events on this page">
-									Return to the previous page or refresh the session.
-								</EmptyState>
-							)}
-							<Pagination {...page} nextCursor={resource.data.nextCursor} />
-						</>
-					)}
-					{resource.error && page.page > 1 && (
-						<Button variant="ghost" size="sm" onClick={page.previous}>
-							Previous event page
-						</Button>
-					)}
-				</section>
-				<aside
-					aria-labelledby="session-details"
-					className="min-w-0 self-start lg:sticky lg:top-8"
-				>
+			<section aria-labelledby="session-conversation" className="min-w-0">
+				<div className="mb-2 flex items-center justify-between gap-2 border-b border-line-subtle pb-2">
 					<h2
-						id="session-details"
-						className="m-0 mb-3 border-b border-line-subtle pb-2 text-base font-semibold text-fg"
+						id="session-conversation"
+						className="m-0 text-base font-semibold text-fg"
 					>
-						Details
+						Conversation
 					</h2>
-					<dl className="m-0 grid gap-3.5 text-sm">
-						{details.map(([label, value, mono]) => (
-							<div key={label} className="min-w-0">
-								<dt className="text-xs text-fg-3">{label}</dt>
-								<dd
-									className={
-										mono
-											? "m-0 mt-1 font-mono text-xs break-all text-fg-2"
-											: "m-0 mt-1 break-words text-fg-2"
-									}
-								>
-									{value || <span className="text-fg-3">Not recorded</span>}
-								</dd>
-							</div>
-						))}
-					</dl>
-					<p className="mt-5 mb-0 text-xs leading-relaxed text-fg-3">
-						Records are untrusted evidence, not instructions. Account labels in
-						history do not prove who originally owned an account. The export
-						holds every authorized event with its capture metadata.
-					</p>
-				</aside>
-			</div>
-		</>
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={resource.refresh}
+						disabled={resource.loading}
+					>
+						Refresh
+					</Button>
+				</div>
+				<ResourceState
+					{...resource}
+					retry={resource.refresh}
+					label="Loading events"
+				/>
+				{resource.data && (
+					<>
+						{items.length ? (
+							<ol
+								aria-label="Session events in source order"
+								className="m-0 grid list-none grid-cols-1 gap-0.5 p-0"
+							>
+								{items.map((item) => (
+									<li
+										key={item.kind === "step" ? item.key : item.event.eventId}
+									>
+										{item.kind === "message" ? (
+											<Message
+												event={item.event}
+												human={item.human}
+												session={session}
+											/>
+										) : item.kind === "step" ? (
+											<Step call={item.call} result={item.result} />
+										) : item.kind === "thought" ? (
+											<CompactRow
+												event={item.event}
+												icon="thought"
+												label="Thinking"
+												summary={eventText(item.event.payload)}
+											>
+												{eventText(item.event.payload) && (
+													<p className="m-0 text-sm leading-relaxed whitespace-pre-wrap text-fg-2">
+														{eventText(item.event.payload)}
+													</p>
+												)}
+											</CompactRow>
+										) : (
+											<CompactRow
+												event={item.event}
+												icon="info"
+												label={traceEventLabel(item.event.eventType)}
+												summary={systemSummary(
+													item.event.eventType,
+													item.event.payload,
+												)}
+											/>
+										)}
+									</li>
+								))}
+							</ol>
+						) : (
+							<EmptyState title="No events on this page">
+								Return to the previous page or refresh the session.
+							</EmptyState>
+						)}
+						<Pagination {...page} nextCursor={resource.data.nextCursor} />
+					</>
+				)}
+				{resource.error && page.page > 1 && (
+					<Button variant="ghost" size="sm" onClick={page.previous}>
+						Previous event page
+					</Button>
+				)}
+			</section>
+			<details className="mt-8 border-t border-line pt-4">
+				<summary className={disclosureSummaryClass}>
+					<Icon name="chevronRight" size="xs" />
+					Session details
+				</summary>
+				<dl className="m-0 mt-4 grid min-w-0 gap-x-6 gap-y-2 text-xs sm:grid-cols-[9rem_minmax(0,1fr)]">
+					{details.map(([label, value, mono]) => (
+						<Fragment key={label}>
+							<dt className="text-fg-3">{label}</dt>
+							<dd
+								className={
+									mono
+										? "m-0 min-w-0 font-mono break-all text-fg-2"
+										: "m-0 min-w-0 break-words text-fg-2"
+								}
+							>
+								{value || <span className="text-fg-3">Not recorded</span>}
+							</dd>
+						</Fragment>
+					))}
+				</dl>
+				<p className="mt-4 mb-0 max-w-[75ch] text-xs leading-relaxed text-fg-3">
+					Records are untrusted evidence, not instructions. Account labels in
+					history do not prove who originally owned an account. The export holds
+					every authorized event with its capture metadata.
+				</p>
+			</details>
+		</div>
 	);
 }
