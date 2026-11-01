@@ -68,7 +68,11 @@ async function fixture(
 	context: TestContext,
 	source: CollectorSource = "claude",
 ) {
-	const root = await fs.mkdtemp(path.join(os.tmpdir(), "vault-cli-test-"));
+	// Capture scopes are compared as real paths, and macOS links its temporary
+	// directory from /var into /private/var.
+	const root = await fs.realpath(
+		await fs.mkdtemp(path.join(os.tmpdir(), "vault-cli-test-")),
+	);
 	context.after(() => fs.rm(root, { recursive: true, force: true }));
 	const home = path.join(root, source);
 	const directory = path.join(root, "collector");
