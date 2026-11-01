@@ -33,6 +33,14 @@ const css = await postcss([tailwind()]).process(
 );
 await writeFile(
 	"dist/public/vault.css",
-	`${css.css}\n:root { --font-inter: Arial, sans-serif; --font-jetbrains-mono: monospace; }\n`,
+	`@font-face { font-family: "Inter"; src: url("/inter.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }\n${css.css}\n:root { --font-inter: "Inter"; --font-jetbrains-mono: ui-monospace; }\n`,
+);
+await cp(
+	new URL("../../src/app/fonts/inter-variable-latin.woff2", import.meta.url),
+	"dist/public/inter.woff2",
+);
+await cp(
+	new URL("../../src/app/icon.svg", import.meta.url),
+	"dist/public/icon.svg",
 );
 await cp("migrations", "dist/migrations", { recursive: true });

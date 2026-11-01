@@ -1,18 +1,26 @@
-import { Component, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+	Component,
+	Fragment,
+	useEffect,
+	useRef,
+	useState,
+	type ReactNode,
+} from "react";
 import { z } from "zod";
+import { BrandMark } from "../../../src/shared/ui/brand";
 import { Audit } from "./ui-audit";
 import { CaptureRules } from "./ui-collection-rules";
 import { Collectors } from "./ui-collectors";
 import {
 	ApiError,
+	Avatar,
+	Badge,
 	Button,
 	Feedback,
 	Field,
-	Heading,
 	Icon,
 	Input,
 	Notice,
-	Panel,
 	SESSION_EXPIRED_EVENT,
 	api,
 	emptySchema,
@@ -21,6 +29,7 @@ import {
 	memberSchema,
 	popoverClasses,
 	useAction,
+	type Member,
 } from "./ui-common";
 import { People } from "./ui-people";
 import { RepositoryPolicy } from "./ui-repositories";
@@ -130,8 +139,8 @@ function VaultApplication() {
 					? state.status.name
 					: null;
 		document.title = vaultName
-			? `${vaultName.slice(0, 100)} · Trace vault`
-			: "Trace vault";
+			? `${vaultName.slice(0, 100)} · Trace Vault`
+			: "Trace Vault";
 	}, [state]);
 	function authenticated(identity: Identity) {
 		setInvitation({ joining: false, token: "" });
@@ -142,30 +151,29 @@ function VaultApplication() {
 		<div className="min-h-screen bg-canvas font-sans text-fg">
 			{state.kind === "loading" && (
 				<AccessFrame>
-					<p role="status" className="py-8 text-sm text-fg-3">
-						Opening company vault…
+					<p role="status" className="text-center text-sm text-fg-3">
+						Opening the vault…
 					</p>
 				</AccessFrame>
 			)}
 			{state.kind === "error" && (
 				<AccessFrame>
-					<Heading
+					<AccessHeading
 						title="Vault unavailable"
 						description="The vault could not be opened. Check your connection or contact your administrator."
 					/>
 					<div className="grid gap-4">
 						<Notice tone="err">{state.error}</Notice>
-						<div>
-							<Button
-								variant="primary"
-								onClick={() => {
-									setState({ kind: "loading" });
-									setAttempt((value) => value + 1);
-								}}
-							>
-								Try opening again
-							</Button>
-						</div>
+						<Button
+							variant="primary"
+							size="lg"
+							onClick={() => {
+								setState({ kind: "loading" });
+								setAttempt((value) => value + 1);
+							}}
+						>
+							Try opening again
+						</Button>
 					</div>
 				</AccessFrame>
 			)}
@@ -216,23 +224,46 @@ function VaultApplication() {
 	);
 }
 
+function Lockup() {
+	return (
+		<span className="inline-flex items-center gap-2 text-fg">
+			<BrandMark />
+			<span className="text-md font-semibold">Trace Vault</span>
+		</span>
+	);
+}
+
+// Sign-in, setup and invitations share the product's access frame: the
+// wordmark over a hairline, then one white card.
 function AccessFrame({ children }: { children: ReactNode }) {
 	return (
-		<main className="mx-auto grid min-h-screen w-full max-w-lg content-center gap-6 px-5 py-12 sm:px-8">
-			<div className="flex items-center gap-3">
-				<span
-					className="grid size-9 place-items-center rounded-lg border border-line-strong font-mono text-sm font-semibold"
-					aria-hidden="true"
-				>
-					tv
-				</span>
-				<span className="text-base font-semibold">Trace vault</span>
-			</div>
-			<Panel>{children}</Panel>
-			<p className="text-xs text-fg-3">
-				Company-owned traces. Access controlled by your company.
+		<div className="flex min-h-screen flex-col bg-canvas text-fg">
+			<header className="flex h-19 shrink-0 items-center border-b border-line px-5 sm:px-8">
+				<Lockup />
+			</header>
+			<main className="flex flex-1 items-center justify-center px-4 py-12 sm:px-5">
+				<div className="w-full max-w-100 rounded-xl border border-line bg-raised p-6 shadow-md sm:p-8">
+					{children}
+				</div>
+			</main>
+		</div>
+	);
+}
+
+function AccessHeading({
+	title,
+	description,
+}: {
+	title: string;
+	description: string;
+}) {
+	return (
+		<div className="mb-6">
+			<h1 className="m-0 text-2xl font-semibold text-fg">{title}</h1>
+			<p className="mt-1.5 mb-0 text-sm leading-relaxed text-fg-3">
+				{description}
 			</p>
-		</main>
+		</div>
 	);
 }
 
@@ -253,14 +284,14 @@ function AccessForm({
 	const setup = !status.initialized;
 	return (
 		<>
-			<Heading
-				title={setup ? "Set up your company vault" : "Sign in"}
+			<AccessHeading
+				title={setup ? "Set up your vault" : "Sign in"}
 				description={
 					setup
-						? "Create the company and its first administrator. Use the bootstrap token provided by your deployment administrator."
+						? "Name the vault and create its first administrator with the bootstrap token from your deployment."
 						: status.name
 							? `Continue to ${status.name}.`
-							: "Use your company vault account to continue."
+							: "Use your vault account to continue."
 				}
 			/>
 			<form
@@ -296,7 +327,7 @@ function AccessForm({
 				>
 					{setup && (
 						<>
-							<Field label="Deployment bootstrap token">
+							<Field label="Bootstrap token">
 								<Input
 									size="lg"
 									type="password"
@@ -306,16 +337,17 @@ function AccessForm({
 									onChange={(event) => setBootstrapToken(event.target.value)}
 								/>
 							</Field>
-							<Field label="Company vault name">
+							<Field label="Vault name">
 								<Input
 									size="lg"
 									required
+									placeholder="Acme Engineering"
 									value={companyName}
 									onChange={(event) => setCompanyName(event.target.value)}
 									autoComplete="organization"
 								/>
 							</Field>
-							<Field label="Your display name">
+							<Field label="Your name">
 								<Input
 									size="lg"
 									required
@@ -336,7 +368,10 @@ function AccessForm({
 							autoComplete="username"
 						/>
 					</Field>
-					<Field label={setup ? "Create a password" : "Password"}>
+					<Field
+						label={setup ? "Create a password" : "Password"}
+						hint={setup ? "12 to 256 characters." : undefined}
+					>
 						<Input
 							size="lg"
 							type="password"
@@ -349,15 +384,10 @@ function AccessForm({
 						/>
 					</Field>
 				</fieldset>
-				{setup && (
-					<p className="text-xs text-fg-3">
-						Use a password of 12–256 characters.
-					</p>
-				)}
 				{accepted && (
 					<Notice tone="neutral">
 						Sign-in was accepted. If the vault did not open, use Open vault to
-						retry the session check without resubmitting your credentials.
+						retry without resubmitting your credentials.
 					</Notice>
 				)}
 				<Feedback action={action} />
@@ -365,6 +395,7 @@ function AccessForm({
 					variant="primary"
 					size="lg"
 					type="submit"
+					className="mt-1"
 					disabled={action.pending}
 				>
 					{action.pending
@@ -372,13 +403,13 @@ function AccessForm({
 						: accepted
 							? "Open vault"
 							: setup
-								? "Create company vault"
+								? "Create vault"
 								: "Sign in"}
 				</Button>
 				{!setup && (
-					<p className="text-xs text-fg-3">
-						Need an account or help signing in? Contact your vault
-						administrator. New members join through a private invitation link.
+					<p className="m-0 text-xs leading-relaxed text-fg-3">
+						New members join through a private invitation link. For access or a
+						password reset, contact your vault administrator.
 					</p>
 				)}
 			</form>
@@ -405,22 +436,18 @@ function JoinForm({
 	const action = useAction();
 	return (
 		<>
-			<Heading
-				title="Join the company vault"
-				description={
-					name
-						? `Accept your invitation to ${name}.`
-						: "Accept the private invitation provided by your company administrator."
-				}
+			<AccessHeading
+				title={name ? `Join ${name}` : "Join the vault"}
+				description="Create a password to accept your invitation. Your name and email come from the invitation."
 			/>
 			{!token ? (
 				<div className="grid gap-4">
 					<Notice tone="err">
 						This page has no valid invitation token. Reopen the original private
-						enrollment link. If it has expired or was already used, ask your
-						administrator for a new invitation.
+						invitation link. If it has expired or was already used, ask your
+						administrator for a new one.
 					</Notice>
-					<Button variant="secondary" onClick={onCancel}>
+					<Button variant="secondary" size="lg" onClick={onCancel}>
 						Return to sign in
 					</Button>
 				</div>
@@ -449,15 +476,15 @@ function JoinForm({
 				>
 					{signedIn && (
 						<Notice tone="warn">
-							You are already signed in. Accepting this invitation will replace
-							the current browser session with the invited account.
+							You are already signed in. Accepting this invitation replaces the
+							current browser session with the invited account.
 						</Notice>
 					)}
 					<fieldset
 						disabled={action.pending || accepted}
 						className="grid min-w-0 gap-4"
 					>
-						<Field label="Create a password">
+						<Field label="Create a password" hint="12 to 256 characters.">
 							<Input
 								size="lg"
 								type="password"
@@ -480,26 +507,18 @@ function JoinForm({
 							/>
 						</Field>
 					</fieldset>
-					<p className="text-xs text-fg-3">
-						Use a password of 12–256 characters. Your name and email are
-						supplied by the invitation.
-					</p>
 					{accepted && (
 						<Notice tone="neutral">
-							Invitation accepted. Use Open vault to retry the session check;
-							the one-time invitation will not be submitted again.
+							Invitation accepted. Use Open vault to retry; the one-time
+							invitation will not be submitted again.
 						</Notice>
 					)}
-					<p className="text-xs text-fg-3">
-						The private token was removed from the address bar and is held only
-						in this page’s memory. Reloading requires reopening the original
-						invitation link.
-					</p>
 					<Feedback action={action} />
 					<Button
 						variant="primary"
 						size="lg"
 						type="submit"
+						className="mt-1"
 						disabled={action.pending}
 					>
 						{action.pending
@@ -509,32 +528,270 @@ function JoinForm({
 								: "Accept invitation"}
 					</Button>
 					<Button variant="ghost" disabled={action.pending} onClick={onCancel}>
-						Cancel invitation
+						Cancel
 					</Button>
+					<p className="m-0 text-xs leading-relaxed text-fg-3">
+						The private token was removed from the address bar and is held only
+						in this page’s memory. After a reload, reopen the original link.
+					</p>
 				</form>
 			)}
 		</>
 	);
 }
 
-const navigation: {
+type NavigationItem = {
 	view: View;
 	label: string;
 	icon: Parameters<typeof Icon>[0]["name"];
-	admin?: boolean;
+};
+
+// The sidebar groups the archive, how work reaches it, and administration.
+const navigationGroups: {
+	label: string | null;
+	admin: boolean;
+	items: NavigationItem[];
 }[] = [
-	{ view: "sessions", label: "Sessions", icon: "sessions" },
-	{ view: "rules", label: "Collection rules", icon: "filter" },
-	{ view: "collectors", label: "Collectors", icon: "collectors" },
 	{
-		view: "repositories",
-		label: "Repositories",
-		icon: "repository",
-		admin: true,
+		label: null,
+		admin: false,
+		items: [{ view: "sessions", label: "Sessions", icon: "sessions" }],
 	},
-	{ view: "people", label: "People", icon: "users", admin: true },
-	{ view: "audit", label: "Audit log", icon: "plan", admin: true },
+	{
+		label: "Collection",
+		admin: false,
+		items: [
+			{ view: "rules", label: "Collection rules", icon: "filter" },
+			{ view: "collectors", label: "Collectors", icon: "collectors" },
+		],
+	},
+	{
+		label: "Administration",
+		admin: true,
+		items: [
+			{ view: "repositories", label: "Repositories", icon: "repository" },
+			{ view: "people", label: "People", icon: "users" },
+			{ view: "audit", label: "Audit log", icon: "plan" },
+		],
+	},
 ];
+
+const navigationLinkClasses = {
+	sidebarActive:
+		"group flex h-8 w-full items-center gap-2.5 rounded-md bg-selected px-2.5 text-sm font-medium text-fg focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent",
+	sidebarIdle:
+		"group flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-sm text-fg-2 transition-colors hover:bg-hover hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent",
+	mobileActive:
+		"flex h-11 shrink-0 items-center gap-1.5 border-b-2 border-accent px-2 text-sm font-medium whitespace-nowrap text-fg focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent",
+	mobileIdle:
+		"flex h-11 shrink-0 items-center gap-1.5 border-b-2 border-transparent px-2 text-sm whitespace-nowrap text-fg-3 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent",
+} as const;
+
+const navigationIconClasses = {
+	active: "text-fg",
+	idle: "text-fg-3 transition-colors group-hover:text-fg-2",
+} as const;
+
+// Settings pages stay at a readable width; collections use the full width.
+const viewWidthClasses = {
+	sessions: "mx-auto w-full max-w-360",
+	collectors: "mx-auto w-full max-w-360",
+	people: "mx-auto w-full max-w-360",
+	audit: "mx-auto w-full max-w-360",
+	rules: "mx-auto w-full max-w-4xl",
+	repositories: "mx-auto w-full max-w-4xl",
+} as const satisfies Record<View, string>;
+
+function vaultMonogram(name: string): string {
+	return (
+		name
+			.trim()
+			.match(/[\p{L}\p{N}]/u)?.[0]
+			?.toUpperCase() ?? "V"
+	);
+}
+
+function Navigation({
+	member,
+	view,
+	onSelect,
+	mobile = false,
+}: {
+	member: Member;
+	view: View;
+	onSelect: (view: View) => void;
+	mobile?: boolean;
+}) {
+	return (
+		<nav
+			aria-label="Vault navigation"
+			className={
+				mobile
+					? "flex gap-1 overflow-x-auto border-b border-line-subtle px-2 sm:gap-2 sm:px-3 lg:hidden"
+					: "mx-3 hidden flex-1 flex-col lg:flex"
+			}
+		>
+			{navigationGroups
+				.filter((group) => !group.admin || member.role === "admin")
+				.map((group) => (
+					<Fragment key={group.label ?? "archive"}>
+						{group.label !== null && !mobile && (
+							<p className="m-0 mt-5 mb-1 px-2.5 text-xs font-medium text-fg-3">
+								{group.label}
+							</p>
+						)}
+						<div className={mobile ? "contents" : "grid gap-0.5"}>
+							{group.items.map((item) => {
+								const active = view === item.view;
+								return (
+									<button
+										key={item.view}
+										type="button"
+										aria-current={active ? "page" : undefined}
+										className={
+											mobile
+												? active
+													? navigationLinkClasses.mobileActive
+													: navigationLinkClasses.mobileIdle
+												: active
+													? navigationLinkClasses.sidebarActive
+													: navigationLinkClasses.sidebarIdle
+										}
+										onClick={() => onSelect(item.view)}
+									>
+										<span className={mobile ? "hidden sm:block" : "contents"}>
+											<Icon
+												className={
+													active
+														? navigationIconClasses.active
+														: navigationIconClasses.idle
+												}
+												name={item.icon}
+												size="sm"
+											/>
+										</span>
+										{item.label}
+									</button>
+								);
+							})}
+						</div>
+					</Fragment>
+				))}
+		</nav>
+	);
+}
+
+function AccountMenu({
+	member,
+	compact = false,
+	onSignedOut,
+}: {
+	member: Member;
+	compact?: boolean;
+	onSignedOut: () => void;
+}) {
+	const details = useRef<HTMLDetailsElement>(null);
+	const [open, setOpen] = useState(false);
+	const logout = useAction();
+	const name = member.name || "Vault member";
+	useEffect(() => {
+		if (!open) return;
+		details.current
+			?.querySelector<HTMLButtonElement>('[role="menuitem"]')
+			?.focus();
+		const close = () => {
+			if (details.current) details.current.open = false;
+		};
+		const outside = (event: PointerEvent) => {
+			if (
+				event.target instanceof Node &&
+				!details.current?.contains(event.target)
+			)
+				close();
+		};
+		const escape = (event: KeyboardEvent) => {
+			if (event.key !== "Escape") return;
+			close();
+			details.current?.querySelector<HTMLElement>("summary")?.focus();
+		};
+		document.addEventListener("pointerdown", outside);
+		document.addEventListener("keydown", escape);
+		return () => {
+			document.removeEventListener("pointerdown", outside);
+			document.removeEventListener("keydown", escape);
+		};
+	}, [open]);
+	return (
+		<details
+			ref={details}
+			className="relative min-w-0"
+			onToggle={(event) => setOpen(event.currentTarget.open)}
+		>
+			<summary
+				aria-label={`Account: ${name}`}
+				aria-haspopup="menu"
+				aria-expanded={open}
+				className={
+					compact
+						? "grid size-8 cursor-pointer list-none place-items-center rounded-md transition-colors hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden"
+						: "flex min-h-12 cursor-pointer list-none items-center gap-2.5 rounded-md px-2 py-2 transition-colors hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent [&::-webkit-details-marker]:hidden"
+				}
+			>
+				<Avatar name={name} size="md" />
+				{!compact && (
+					<>
+						<span className="min-w-0 flex-1 text-left">
+							<span className="block truncate text-sm font-medium text-fg">
+								{name}
+							</span>
+							<span className="block truncate text-xs text-fg-3">
+								{member.email}
+							</span>
+						</span>
+						<Icon className="text-fg-3" name="chevronsUpDown" size="sm" />
+					</>
+				)}
+			</summary>
+			<div
+				role="menu"
+				aria-label="Your account"
+				className={
+					popoverClasses.menu +
+					(compact
+						? " absolute top-full right-0 z-30 mt-2 grid w-60 gap-0.5"
+						: " absolute bottom-full left-0 z-30 mb-2 grid w-56 gap-0.5")
+				}
+			>
+				<div className="mb-1 grid gap-1 border-b border-line-subtle px-2.5 pt-1.5 pb-2.5">
+					<p className="m-0 truncate text-sm font-medium">{name}</p>
+					<p className="m-0 truncate text-xs text-fg-3">{member.email}</p>
+					<div className="mt-1">
+						<Badge>
+							{member.role === "admin" ? "Administrator" : "Member"}
+						</Badge>
+					</div>
+				</div>
+				{logout.error && <Notice tone="err">{logout.error}</Notice>}
+				<Button
+					role="menuitem"
+					variant="ghost"
+					size="sm"
+					className="w-full justify-start"
+					disabled={logout.pending}
+					aria-busy={logout.pending}
+					onClick={() => {
+						void logout.run(async () => {
+							await api("/api/auth/logout", emptySchema, { method: "POST" });
+							onSignedOut();
+						});
+					}}
+				>
+					{logout.pending ? "Signing out…" : "Sign out"}
+				</Button>
+			</div>
+		</details>
+	);
+}
 
 function Workspace({
 	identity,
@@ -545,149 +802,80 @@ function Workspace({
 }) {
 	const [view, setView] = useState<View>("sessions");
 	const main = useRef<HTMLElement>(null);
-	const logout = useAction();
 	const { member, vaultName } = identity;
-	const permitted = navigation.filter(
-		(item) => !item.admin || member.role === "admin",
-	);
 	useEffect(() => {
 		main.current?.focus();
 	}, [view]);
+	const vaultIdentity = (
+		<span className="flex min-w-0 items-center gap-2.5">
+			<span
+				aria-hidden="true"
+				className="grid size-6 shrink-0 place-items-center rounded-md bg-primary text-xs font-semibold text-primary-fg"
+			>
+				{vaultMonogram(vaultName)}
+			</span>
+			<span
+				className="min-w-0 flex-1 truncate text-sm font-medium text-fg"
+				title={vaultName}
+			>
+				{vaultName}
+			</span>
+		</span>
+	);
 	return (
-		<div className="min-h-screen md:flex">
+		<div className="flex min-h-screen bg-canvas text-fg">
 			<a
 				href="#vault-content"
-				className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:bg-canvas focus:p-3 focus:text-fg"
+				className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-fg"
 			>
 				Skip to content
 			</a>
-			<aside className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] border-b border-line bg-canvas md:sticky md:top-0 md:flex md:h-screen md:w-52 md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
-				<div className="flex min-w-0 items-center justify-between gap-3 px-4 py-3 md:py-5">
-					<div className="min-w-0">
-						<p className="mb-1 text-2xs text-fg-3">Trace vault</p>
-						<p className="truncate text-sm font-semibold" title={vaultName}>
-							{vaultName}
-						</p>
-					</div>
+			<aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-canvas lg:flex">
+				<div className="flex h-14 shrink-0 items-center px-5">
+					<Lockup />
 				</div>
-				<nav
-					aria-label="Vault navigation"
-					className="col-span-2 flex gap-0.5 overflow-x-auto px-2 pb-3 md:flex-col md:overflow-visible"
-				>
-					{permitted.map((item) => (
-						<Button
-							key={item.view}
-							variant="ghost"
-							size="sm"
-							className="justify-start md:w-full"
-							aria-current={view === item.view ? "page" : undefined}
-							onClick={() => setView(item.view)}
-						>
-							<Icon name={item.icon} size="sm" />
-							<span
-								className={view === item.view ? "font-semibold text-fg" : ""}
-							>
-								{item.label}
-							</span>
-							{view === item.view && (
-								<span className="ml-auto size-1 rounded-full bg-fg" />
-							)}
-						</Button>
-					))}
-				</nav>
-				<div className="col-start-2 row-start-1 flex min-w-0 items-center border-line px-2 py-3 md:mt-auto md:border-t">
-					<Button
-						variant="ghost"
-						size="sm"
-						className="min-w-0 justify-start md:w-full"
-						aria-label={`Account: ${member.name || "Vault member"}`}
-						popoverTarget="vault-account"
-					>
-						<Icon name="users" size="sm" />
-						<span className="hidden min-w-0 truncate md:inline">
-							{member.name || "Vault member"}
-						</span>
-						<span className="ml-auto hidden md:inline-flex">
-							<Icon name="chevronDown" size="xs" />
-						</span>
-					</Button>
-					<div
-						id="vault-account"
-						popover="auto"
-						role="group"
-						aria-label="Your account"
-						className={
-							popoverClasses.menu +
-							" fixed top-14 right-3 bottom-auto left-auto m-0 w-64 max-w-[calc(100vw-1.5rem)] md:top-auto md:right-auto md:bottom-14 md:left-3 md:w-48"
-						}
-					>
-						<div className="mb-1 border-b border-line px-2.5 py-2">
-							<p className="break-words text-sm font-medium">
-								{member.name || "Vault member"}
-							</p>
-							<p className="mt-0.5 break-all text-xs text-fg-3">
-								{member.email}
-							</p>
-							<p className="mt-1 text-2xs text-fg-3">
-								{member.role === "admin" ? "Administrator" : "Member"}
-							</p>
-						</div>
-						{logout.error && <Notice tone="err">{logout.error}</Notice>}
-						<Button
-							variant="ghost"
-							size="sm"
-							className="w-full justify-start"
-							disabled={logout.pending}
-							aria-busy={logout.pending}
-							onClick={() => {
-								void logout.run(async () => {
-									await api("/api/auth/logout", emptySchema, {
-										method: "POST",
-									});
-									onSignedOut();
-								});
-							}}
-						>
-							{logout.pending ? "Signing out…" : "Sign out"}
-						</Button>
-					</div>
+				<div className="mx-3 flex h-10 min-w-0 items-center px-2">
+					{vaultIdentity}
+				</div>
+				<div className="mt-1 flex min-h-0 flex-1 flex-col overflow-y-auto">
+					<Navigation member={member} view={view} onSelect={setView} />
+				</div>
+				<div className="mx-3 mt-2 border-t border-line-subtle py-2">
+					<AccountMenu member={member} onSignedOut={onSignedOut} />
 				</div>
 			</aside>
-			<main
-				ref={main}
-				id="vault-content"
-				tabIndex={-1}
-				className="min-w-0 flex-1 px-5 py-6 outline-none md:px-8"
-			>
-				<div
-					className={
-						view === "rules" || view === "repositories"
-							? "mx-auto max-w-3xl"
-							: "mx-auto max-w-7xl"
-					}
+			<div className="flex min-w-0 flex-1 flex-col bg-canvas">
+				<header className="sticky top-0 z-20 flex min-h-14 shrink-0 items-center gap-3 border-b border-line bg-canvas/95 px-4 py-2 backdrop-blur-md sm:px-6 lg:hidden">
+					<BrandMark />
+					<div className="min-w-0 flex-1">{vaultIdentity}</div>
+					<AccountMenu member={member} compact onSignedOut={onSignedOut} />
+				</header>
+				<Navigation member={member} view={view} onSelect={setView} mobile />
+				<main
+					ref={main}
+					id="vault-content"
+					tabIndex={-1}
+					className="flex-1 px-4 pt-6 pb-12 outline-none sm:px-6 lg:px-10 lg:pt-8"
 				>
-					<p className="mb-5 hidden items-center gap-2 text-2xs text-fg-3 sm:flex">
-						<span className="max-w-48 truncate">{vaultName}</span>
-						<Icon name="chevronRight" size="xs" />
-						<span>{permitted.find((item) => item.view === view)?.label}</span>
-					</p>
-					{view === "sessions" && (
-						<Sessions
-							member={member}
-							onCollectors={() => setView("collectors")}
-						/>
-					)}
-					{view === "rules" && <CaptureRules />}
-					{view === "collectors" && (
-						<Collectors onRules={() => setView("rules")} />
-					)}
-					{view === "repositories" && member.role === "admin" && (
-						<RepositoryPolicy />
-					)}
-					{view === "people" && member.role === "admin" && <People />}
-					{view === "audit" && member.role === "admin" && <Audit />}
-				</div>
-			</main>
+					<div className={viewWidthClasses[view]}>
+						{view === "sessions" && (
+							<Sessions
+								member={member}
+								onCollectors={() => setView("collectors")}
+							/>
+						)}
+						{view === "rules" && <CaptureRules />}
+						{view === "collectors" && (
+							<Collectors onRules={() => setView("rules")} />
+						)}
+						{view === "repositories" && member.role === "admin" && (
+							<RepositoryPolicy />
+						)}
+						{view === "people" && member.role === "admin" && <People />}
+						{view === "audit" && member.role === "admin" && <Audit />}
+					</div>
+				</main>
+			</div>
 		</div>
 	);
 }
@@ -703,26 +891,25 @@ class VaultErrorBoundary extends Component<
 	render() {
 		if (this.state.failed)
 			return (
-				<div className="min-h-screen bg-canvas text-fg">
-					<AccessFrame>
-						<Heading
-							title="Unable to display the vault"
-							description="The interface encountered an unexpected error. Reload to restore your signed-in session."
-						/>
+				<AccessFrame>
+					<AccessHeading
+						title="Unable to display the vault"
+						description="The interface hit an unexpected error. Reload to restore your signed-in session."
+					/>
+					<div className="grid gap-4">
 						<Notice tone="err">
 							Unsaved changes and any invitation link shown only once may be
 							lost when you reload.
 						</Notice>
-						<div className="mt-4">
-							<Button
-								variant="primary"
-								onClick={() => window.location.reload()}
-							>
-								Reload vault
-							</Button>
-						</div>
-					</AccessFrame>
-				</div>
+						<Button
+							variant="primary"
+							size="lg"
+							onClick={() => window.location.reload()}
+						>
+							Reload vault
+						</Button>
+					</div>
+				</AccessFrame>
 			);
 		return this.props.children;
 	}

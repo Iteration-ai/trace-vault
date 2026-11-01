@@ -5,5 +5,9 @@ Licensed under the Apache License, Version 2.0.
 The proprietary Iteration application is not included in this license grant.
 See OPEN-SOURCE.md at the repository root for the covered shared source paths.
 
+The Inter typeface in src/app/fonts is licensed under the SIL Open Font License
+1.1; see src/app/fonts/Inter-LICENSE.txt. Claude Code, Codex and Cursor marks in
+src/shared/ui/tool-logos.tsx come from Simple Icons and belong to their owners.
+
 Third-party dependencies retain their own licenses. Bundled dependencies' legal
 comments are preserved; installed dependencies include their license notices.

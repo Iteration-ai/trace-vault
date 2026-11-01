@@ -948,6 +948,14 @@ test("vault owner isolation, revocation, disabled-member retention, and secret-f
 		sourceSessionId: "source-session",
 	};
 	assert.deepEqual((await store.listSessions(coworker)).items, []);
+	assert.deepEqual(
+		(await store.listDevices(adminCaller)).items.map((row) => [
+			row.id,
+			row.memberName,
+		]),
+		[[device.id, "Member"]],
+	);
+	assert.deepEqual((await store.listDevices(coworker)).items, []);
 	assert.deepEqual((await store.readEvents(coworker, null)).items, []);
 	const session = await store.getSession(memberCaller, identity);
 	await assert.rejects(
@@ -1014,6 +1022,21 @@ test("vault owner isolation, revocation, disabled-member retention, and secret-f
 	assert.equal(audit.items.length, 1);
 	assert.ok(audit.nextCursor);
 	const actions = (await store.listAudit(adminCaller)).items;
+	const newestFirst = [...actions].sort(
+		(left, right) =>
+			right.createdAt.getTime() - left.createdAt.getTime() ||
+			right.id.localeCompare(left.id),
+	);
+	assert.deepEqual(
+		actions.map((row) => row.id),
+		newestFirst.map((row) => row.id),
+	);
+	const secondPage = await store.listAudit(adminCaller, {
+		limit: 1,
+		after: audit.nextCursor,
+	});
+	assert.equal(secondPage.items[0]?.id, actions[1]?.id);
+	assert.equal(audit.items[0]?.actorName, actions[0]?.actorName);
 	assert.ok(
 		actions.some(
 			(row) =>

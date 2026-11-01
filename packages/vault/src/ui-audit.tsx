@@ -2,15 +2,19 @@ import { useId, useState } from "react";
 import { z } from "zod";
 import {
 	Button,
-	Heading,
+	EmptyState,
 	Icon,
+	PageHeader,
 	Pagination,
+	Person,
+	RelativeTime,
 	ResourceState,
 	formatTime,
 	pageSchema,
 	tableBodyClass,
 	tableClasses,
 	tableDenseCellClass,
+	tableFrameClass,
 	tableHeaderCellClass,
 	tableHeadRowClass,
 	usePage,
@@ -22,53 +26,57 @@ const auditSchema = pageSchema(
 		id: z.string(),
 		action: z.string(),
 		actorId: z.string().nullable(),
+		actorName: z.string().nullable(),
+		targetId: z.string(),
 		createdAt: z.string(),
 	}),
 );
 type AuditRecord = z.infer<typeof auditSchema>["items"][number];
 
-function shortId(id: string, ids: string[]): string {
-	if (id.length <= 16) return id;
-	let length = 8;
-	while (
-		length < id.length - 5 &&
-		ids.some(
-			(other) =>
-				other !== id &&
-				other.startsWith(id.slice(0, length)) &&
-				other.endsWith(id.slice(-4)),
-		)
-	)
-		length++;
-	return length >= id.length - 5
-		? id
-		: `${id.slice(0, length)}…${id.slice(-4)}`;
+const actionLabels: Record<string, string> = {
+	"company.initialized": "Vault created",
+	"admin.password_recovered": "Administrator password recovered",
+	"member.updated": "Member access changed",
+	"invitation.created": "Invitation created",
+	"invitation.revoked": "Invitation revoked",
+	"invitation.redeemed": "Invitation accepted",
+	"device.enrolled": "Collector enrolled",
+	"device.revoked": "Collector revoked",
+	"policy.member_updated": "Collection rules changed",
+	"policy.repositories_updated": "Repositories changed",
+	"session.deleted": "Session deleted",
+};
+
+// Unknown actions from newer servers stay readable as their stored name.
+function actionLabel(action: string): string {
+	return Object.hasOwn(actionLabels, action)
+		? actionLabels[action]!
+		: action || "Empty action";
 }
 
 export function Audit() {
 	const page = usePage();
 	const resource = useResource(`/api/audit${page.query}`, auditSchema);
 	const records = resource.data?.items ?? [];
-	const recordIds = records.map((record) => record.id);
-	const actorIds = records.flatMap((record) =>
-		record.actorId === null ? [] : [record.actorId],
-	);
 	return (
 		<>
-			<Heading
+			<PageHeader
 				title="Audit log"
-				description="Recorded administrative and access activity."
+				description="Administrative and access changes, newest first"
 			>
 				<Button
-					variant="ghost"
-					size="sm"
+					variant="secondary"
 					disabled={resource.loading}
 					onClick={resource.refresh}
 				>
 					Refresh
 				</Button>
-			</Heading>
-			<ResourceState {...resource} retry={resource.refresh} />
+			</PageHeader>
+			<ResourceState
+				{...resource}
+				retry={resource.refresh}
+				label="Loading audit records"
+			/>
 			{resource.error && page.page > 1 && (
 				<Button variant="ghost" size="sm" onClick={page.previous}>
 					Previous audit page
@@ -77,15 +85,15 @@ export function Audit() {
 			{resource.data && (
 				<>
 					{records.length ? (
-						<div className="min-w-0 border-y border-line">
+						<div className={tableFrameClass}>
 							<table
 								className={tableClasses.compact + " table-fixed"}
 								aria-label="Audit records"
 							>
 								<colgroup>
 									<col />
-									<col className="hidden sm:table-column sm:w-1/3 lg:w-64" />
-									<col className="w-28 sm:w-44" />
+									<col className="hidden sm:table-column sm:w-1/4 lg:w-60" />
+									<col className="w-28 sm:w-36" />
 								</colgroup>
 								<thead>
 									<tr className={tableHeadRowClass}>
@@ -96,37 +104,32 @@ export function Audit() {
 											scope="col"
 											className={tableHeaderCellClass + " hidden sm:table-cell"}
 										>
-											Actor ID
+											By
 										</th>
 										<th scope="col" className={tableHeaderCellClass}>
-											Time
+											When
 										</th>
 									</tr>
 								</thead>
 								<tbody className={tableBodyClass}>
 									{records.map((record) => (
-										<AuditRow
-											key={record.id}
-											record={record}
-											recordLabel={shortId(record.id, recordIds)}
-											actorLabel={
-												record.actorId === null
-													? "System / not recorded"
-													: shortId(record.actorId, actorIds) || "(empty ID)"
-											}
-										/>
+										<AuditRow key={record.id} record={record} />
 									))}
 								</tbody>
 							</table>
 						</div>
 					) : (
-						<div className="border-y border-line py-4 text-sm text-fg-3">
-							<p>
-								{page.page === 1
-									? "No audit records yet."
-									: "No audit records on this page. Return to the previous page or refresh."}
-							</p>
-						</div>
+						<EmptyState
+							title={
+								page.page === 1
+									? "No audit records yet"
+									: "No audit records on this page"
+							}
+						>
+							{page.page === 1
+								? "Invitations, member access, collectors and rule changes appear here."
+								: "Return to the previous page or refresh."}
+						</EmptyState>
 					)}
 					<Pagination {...page} nextCursor={resource.data.nextCursor} />
 				</>
@@ -135,105 +138,74 @@ export function Audit() {
 	);
 }
 
-function AuditRow({
-	record,
-	recordLabel,
-	actorLabel,
-}: {
-	record: AuditRecord;
-	recordLabel: string;
-	actorLabel: string;
-}) {
+function AuditRow({ record }: { record: AuditRecord }) {
 	const [open, setOpen] = useState(false);
 	const detailId = useId();
-	const date = new Date(record.createdAt);
-	const validDate = !Number.isNaN(date.getTime());
+	const actor =
+		record.actorId === null ? "System" : record.actorName || "Unknown member";
 	return (
 		<>
-			<tr className="hover:bg-hover focus-within:bg-hover">
-				<td className="h-8 min-w-0 px-1.5 py-0 align-middle">
+			<tr className={open ? "bg-hover" : "hover:bg-hover"}>
+				<td className="h-10 min-w-0 px-1.5 py-0 align-middle">
 					<Button
 						variant="ghost"
 						size="sm"
-						className="w-full min-w-0 justify-start"
+						className="w-full min-w-0 justify-start text-fg hover:bg-transparent"
 						aria-expanded={open}
 						aria-controls={detailId}
-						aria-label={`Audit record ${record.id}: ${record.action || "Empty action"}`}
+						aria-label={`Audit record: ${actionLabel(record.action)} by ${actor}`}
 						onClick={() => setOpen((value) => !value)}
 					>
-						<Icon name={open ? "chevronDown" : "chevronRight"} size="sm" />
-						<span className="truncate text-fg">
-							{record.action || "Empty action"}
-						</span>
-						<span className="hidden max-w-1/3 shrink-0 truncate font-mono text-2xs text-fg-3 lg:inline">
-							{recordLabel}
+						<Icon
+							name="chevronRight"
+							size="xs"
+							className={
+								open
+									? "rotate-90 text-fg-3 transition-transform"
+									: "text-fg-4 transition-transform"
+							}
+						/>
+						<span className="truncate">{actionLabel(record.action)}</span>
+						<span className="truncate text-xs font-normal text-fg-3 sm:hidden">
+							{actor}
 						</span>
 					</Button>
-					<p className="truncate px-2.5 pb-1 text-xs text-fg-3 sm:hidden">
-						<span className={record.actorId === null ? "" : "font-mono"}>
-							{actorLabel}
+				</td>
+				<td className={tableDenseCellClass + " hidden text-xs sm:table-cell"}>
+					{record.actorId === null ? (
+						<span className="text-fg-3">System</span>
+					) : (
+						<span title={`Member ID ${record.actorId}`}>
+							<Person name={record.actorName ?? ""} />
 						</span>
-					</p>
+					)}
 				</td>
-				<td className={tableDenseCellClass + " hidden sm:table-cell"}>
-					<p
-						className={
-							record.actorId === null
-								? "truncate text-fg-3"
-								: "truncate font-mono text-xs text-fg-2"
-						}
-					>
-						{actorLabel}
-					</p>
-				</td>
-				<td className={tableDenseCellClass}>
-					<time
-						dateTime={validDate ? record.createdAt : undefined}
-						className="block truncate text-xs text-fg-3 tabular-nums"
-					>
-						{validDate
-							? date.toLocaleDateString(undefined, {
-									month: "short",
-									day: "numeric",
-									year: "2-digit",
-								})
-							: record.createdAt}
-						{validDate && (
-							<span className="block sm:inline">
-								{" "}
-								{date.toLocaleTimeString(undefined, {
-									hour: "2-digit",
-									minute: "2-digit",
-									hour12: false,
-								})}
-							</span>
-						)}
-					</time>
+				<td className={tableDenseCellClass + " text-xs text-fg-3 tabular-nums"}>
+					<RelativeTime value={record.createdAt} />
 				</td>
 			</tr>
-			<tr id={detailId} hidden={!open}>
-				<td colSpan={3} className="px-4 py-3">
-					<dl className="grid min-w-0 gap-x-4 gap-y-1 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
+			<tr id={detailId} hidden={!open} className="bg-surface">
+				<td colSpan={3} className="px-4 py-3 sm:pl-10">
+					<dl className="m-0 grid min-w-0 gap-x-6 gap-y-1.5 text-xs sm:grid-cols-[8rem_minmax(0,1fr)]">
+						<dt className="text-fg-3">Recorded at</dt>
+						<dd className="m-0 min-w-0 break-all text-fg-2">
+							{formatTime(record.createdAt)}
+						</dd>
 						<dt className="text-fg-3">Action</dt>
-						<dd className="min-w-0 break-all font-mono">
+						<dd className="m-0 min-w-0 font-mono break-all text-fg-2">
 							{record.action || "(empty string)"}
 						</dd>
-						<dt className="text-fg-3">Actor ID</dt>
-						<dd className="min-w-0 break-all font-mono">
-							{record.actorId === null
-								? "System / not recorded (null)"
-								: record.actorId || "(empty string)"}
+						<dt className="text-fg-3">Target ID</dt>
+						<dd className="m-0 min-w-0 font-mono break-all text-fg-2">
+							{record.targetId || "(empty string)"}
 						</dd>
-						<dt className="text-fg-3">Recorded at</dt>
-						<dd className="min-w-0 break-all">
-							{formatTime(record.createdAt)}
-							<p className="font-mono text-xs text-fg-3">
-								{record.createdAt || "(empty string)"}
-							</p>
+						<dt className="text-fg-3">Actor ID</dt>
+						<dd className="m-0 min-w-0 font-mono break-all text-fg-2">
+							{record.actorId ?? "None (system)"}
 						</dd>
 						<dt className="text-fg-3">Record ID</dt>
-						<dd className="min-w-0 break-all font-mono">
-							{record.id || "(empty string)"}
+						<dd className="m-0 min-w-0 font-mono break-all text-fg-2">
+							{record.id}
 						</dd>
 					</dl>
 				</td>

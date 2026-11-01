@@ -8,7 +8,7 @@ export function SessionLocation({
 	cwd: string | null;
 }) {
 	const value = repository || cwd;
-	if (!value) return <span className="text-fg-3">—</span>;
+	if (!value) return <span className="text-xs text-fg-3">—</span>;
 	const separator = repository || !value.includes("\\") ? "/" : "\\";
 	const label = repository
 		? value.replace(/^github\.com\//, "")
@@ -21,7 +21,10 @@ export function SessionLocation({
 		if (folders.length > 2) context = folders.at(-1)!;
 	}
 	return (
-		<span className="flex min-w-0 items-center gap-1.5 text-xs" title={value}>
+		<span
+			className="flex min-w-0 items-center gap-1.5 font-mono text-2xs"
+			title={value}
+		>
 			<span className="sr-only">
 				{repository ? "Repository" : "Directory"}: {value}
 			</span>

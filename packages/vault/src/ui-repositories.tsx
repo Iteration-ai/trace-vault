@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
 	Button,
-	Heading,
+	EmptyState,
 	Icon,
 	Input,
 	Notice,
+	PageHeader,
 	ResourceState,
 	api,
+	disclosureSummaryClass,
 	policySchema,
 	useAction,
 	useResource,
@@ -17,11 +19,15 @@ export function RepositoryPolicy() {
 	const resource = useResource("/api/me/capture-rules", policySchema);
 	return (
 		<>
-			<Heading
-				title="Repository access"
-				description="Company repositories approved for collection."
+			<PageHeader
+				title="Repositories"
+				description="Company repositories that every member may collect from"
 			/>
-			<ResourceState {...resource} retry={resource.refresh} />
+			<ResourceState
+				{...resource}
+				retry={resource.refresh}
+				label="Loading repositories"
+			/>
 			{resource.data && <RepositoryForm initial={resource.data} />}
 		</>
 	);
@@ -46,10 +52,10 @@ function RepositoryForm({ initial }: { initial: Policy }) {
 			className="min-w-0 text-sm"
 			aria-label="Approved repositories"
 		>
-			<div className="flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-line pb-2">
+			<div className="mb-3 flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-1">
 				<div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-					<h2 className="text-sm font-medium">
-						{editing ? "Manage repositories" : "Approved repositories"}
+					<h2 className="m-0 text-base font-semibold">
+						{editing ? "Edit repositories" : "Approved repositories"}
 					</h2>
 					<span className="min-w-0 text-xs break-all text-fg-3">
 						Revision {policy.revision}
@@ -59,13 +65,13 @@ function RepositoryForm({ initial }: { initial: Policy }) {
 					<Button
 						data-manage-repositories
 						variant="secondary"
-						size="sm"
 						onClick={() => {
 							setSaved(false);
 							setEditing(true);
 						}}
 					>
-						Manage
+						<Icon name="edit" size="sm" />
+						Edit
 					</Button>
 				)}
 			</div>
@@ -80,34 +86,45 @@ function RepositoryForm({ initial }: { initial: Policy }) {
 					}}
 				/>
 			) : policy.repositories.length ? (
-				<ul className="min-w-0 divide-y divide-line-subtle">
+				<ul className="m-0 grid min-w-0 list-none divide-y divide-line-subtle rounded-lg border border-line p-0">
 					{policy.repositories.map((repository) => (
 						<li
 							key={repository}
-							className="flex h-8 min-w-0 items-center gap-2"
+							className="flex h-10 min-w-0 items-center gap-2.5 px-3"
 						>
-							<span className="shrink-0 text-fg-3" aria-hidden="true">
-								<Icon name="repository" size="sm" />
-							</span>
-							<span className="truncate font-mono text-fg-2" title={repository}>
+							<Icon
+								name="repository"
+								size="sm"
+								className="shrink-0 text-fg-3"
+							/>
+							<span
+								className="truncate font-mono text-xs text-fg-2"
+								title={repository}
+							>
 								{repository}
 							</span>
 						</li>
 					))}
 				</ul>
 			) : (
-				<p className="py-3 text-fg-3">No repositories approved.</p>
+				<EmptyState title="No repositories approved">
+					Members can still collect from approved work accounts and research
+					directories. Add a repository to approve it for everyone.
+				</EmptyState>
 			)}
 			{saved && (
-				<p className="mt-2 text-xs text-ok" role="status">
-					Repository access saved. Approved keys and revision updated above.
-				</p>
+				<div className="mt-3">
+					<Notice tone="ok">
+						Repository access saved. The list above shows the canonical keys.
+					</Notice>
+				</div>
 			)}
-			<details className="mt-4 text-xs text-fg-3">
-				<summary className="w-fit cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
-					Repository access help
+			<details className="mt-5">
+				<summary className={disclosureSummaryClass}>
+					<Icon name="chevronRight" size="xs" />
+					Accepted URLs and what approval covers
 				</summary>
-				<div className="mt-2 grid max-w-2xl gap-2 text-sm text-fg-2">
+				<div className="mt-2 grid max-w-[75ch] gap-2 text-sm text-fg-2">
 					<p>
 						Only authorize repositories the company owns or has permission to
 						collect. Never include passwords or tokens in URLs.
@@ -153,7 +170,7 @@ function RepositoryEditor({
 	return (
 		<form
 			ref={form}
-			className="grid min-w-0 gap-3 pt-3"
+			className="grid min-w-0 gap-3 rounded-lg border border-line bg-raised p-4 shadow-sm"
 			onSubmit={(event) => {
 				event.preventDefault();
 				void action.run(async () => {
@@ -178,6 +195,7 @@ function RepositoryEditor({
 					{rows.map((row, index) => (
 						<div key={row.key} className="flex min-w-0 items-center gap-1">
 							<Input
+								icon="repository"
 								aria-label={`Repository URL ${index + 1}`}
 								data-repository-row={row.key}
 								className="flex-1"
@@ -218,7 +236,8 @@ function RepositoryEditor({
 							/>
 							<Button
 								variant="ghost"
-								size="sm"
+								size="icon"
+								title="Remove"
 								aria-label={`Remove repository URL ${index + 1}`}
 								onClick={() => {
 									setRows((current) =>
@@ -237,7 +256,7 @@ function RepositoryEditor({
 									});
 								}}
 							>
-								Remove
+								<Icon name="trash" size="sm" />
 							</Button>
 						</div>
 					))}

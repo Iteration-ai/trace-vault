@@ -9,6 +9,8 @@ COPY packages/trace-postgres packages/trace-postgres
 COPY packages/vault packages/vault
 COPY src/shared/ui src/shared/ui
 COPY src/app/globals.css src/app/globals.css
+COPY src/app/fonts src/app/fonts
+COPY src/app/icon.svg src/app/icon.svg
 RUN pnpm install --frozen-lockfile && pnpm --filter trace-vault build
 RUN pnpm --filter trace-vault --prod deploy --legacy /output
 RUN test -s /output/node_modules/iteration-trace-postgres/migrate.mjs \

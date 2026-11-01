@@ -2,18 +2,16 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { z } from "zod";
 import {
 	Button,
-	Heading,
-	Icon,
+	EmptyState,
+	PageHeader,
 	Pagination,
-	Panel,
+	Person,
+	RelativeTime,
 	ResourceState,
-	formatTime,
+	SourceMark,
 	pageSchema,
-	tableBodyClass,
-	tableClasses,
-	tableDenseCellClass,
-	tableHeaderCellClass,
-	tableHeadRowClass,
+	sourceLabel,
+	tableFrameClass,
 	usePage,
 	useResource,
 	type Member,
@@ -36,6 +34,19 @@ const sessionSchema = z.object({
 export type Session = z.infer<typeof sessionSchema>;
 const sessionsSchema = pageSchema(sessionSchema);
 
+// Admins see every contributor, so their ledger gains a contributor column.
+const sessionColumnClasses = {
+	admin:
+		"lg:grid-cols-[minmax(0,2.6fr)_minmax(0,1.2fr)_minmax(0,1fr)_72px_104px]",
+	member: "lg:grid-cols-[minmax(0,2.6fr)_minmax(0,1.2fr)_72px_104px]",
+} as const;
+
+const sessionHeaderClass =
+	"hidden h-9 items-center gap-4 border-b border-line px-4 text-xs font-medium text-fg-3 lg:grid";
+
+const sessionRowClass =
+	"group grid w-full min-w-0 gap-x-4 gap-y-1 px-4 py-2.5 text-left text-fg-2 transition-colors hover:bg-hover focus-visible:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent sm:grid-cols-[minmax(0,1fr)_auto] lg:items-center";
+
 export function Sessions({
 	member,
 	onCollectors,
@@ -56,6 +67,8 @@ export function Sessions({
 	);
 	const rows = resource.data?.items ?? [];
 	const index = rows.findIndex((session) => session.id === selected?.id);
+	const admin = member.role === "admin";
+	const columns = sessionColumnClasses[admin ? "admin" : "member"];
 	useLayoutEffect(() => {
 		if (selected) {
 			window.scrollTo(0, 0);
@@ -93,235 +106,70 @@ export function Sessions({
 				aria-label="Session collection"
 				className="outline-none"
 			>
-				<Heading
+				<PageHeader
 					title="Sessions"
-					description={
-						member.role === "admin"
-							? "Company archive"
-							: "Your contributed traces"
-					}
+					description={admin ? undefined : "Sessions you contributed"}
 				>
-					<div className="flex gap-1">
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={resource.refresh}
-							disabled={resource.loading}
-						>
-							Refresh
-						</Button>
-						<Button variant="secondary" size="sm" onClick={onCollectors}>
-							<Icon name="plus" size="sm" /> Collector
-						</Button>
-					</div>
-				</Heading>
-				<ResourceState {...resource} retry={resource.refresh} />
+					<Button
+						variant="secondary"
+						onClick={resource.refresh}
+						disabled={resource.loading}
+					>
+						Refresh
+					</Button>
+				</PageHeader>
+				<ResourceState
+					{...resource}
+					retry={resource.refresh}
+					label="Loading sessions"
+				/>
 				{resource.data && (
 					<>
 						{rows.length === 0 ? (
-							<Panel>
-								<h2 className="text-base font-semibold">
-									{page.page === 1
-										? "No sessions yet"
-										: "No sessions on this page"}
-								</h2>
-								<p className="mt-2 text-sm text-fg-2">
-									{page.page === 1
-										? "Connect a collector to bring approved work into your company archive."
-										: "Return to the previous page or refresh the archive."}
-								</p>
-								{page.page === 1 && (
-									<div className="mt-4">
+							page.page === 1 ? (
+								<EmptyState
+									title="No sessions yet"
+									action={
 										<Button variant="primary" onClick={onCollectors}>
 											Set up a collector
 										</Button>
-									</div>
-								)}
-							</Panel>
-						) : (
-							<div className="border-y border-line">
-								<table
-									className={tableClasses.compact + " table-fixed"}
-									aria-label="Trace sessions"
+									}
 								>
-									<colgroup>
-										<col />
-										<col className="hidden sm:table-column sm:w-1/4" />
-										{member.role === "admin" && (
-											<col className="hidden lg:table-column lg:w-28" />
-										)}
-										<col className="hidden xl:table-column xl:w-24" />
-										<col className="hidden xl:table-column xl:w-20" />
-										<col className="w-24 sm:w-32" />
-									</colgroup>
-									<thead className="sticky top-0 z-10 bg-canvas">
-										<tr className={tableHeadRowClass}>
-											<th scope="col" className={tableHeaderCellClass}>
-												Session
-											</th>
-											<th
-												scope="col"
-												className={
-													tableHeaderCellClass + " hidden sm:table-cell"
-												}
-											>
-												Location
-											</th>
-											{member.role === "admin" && (
-												<th
-													scope="col"
-													className={
-														tableHeaderCellClass + " hidden lg:table-cell"
-													}
-												>
-													Contributor
-												</th>
-											)}
-											<th
-												scope="col"
-												className={
-													tableHeaderCellClass + " hidden xl:table-cell"
-												}
-											>
-												Source
-											</th>
-											<th
-												scope="col"
-												className={
-													tableHeaderCellClass +
-													" hidden xl:table-cell text-right"
-												}
-											>
-												Events
-											</th>
-											<th
-												scope="col"
-												className={tableHeaderCellClass}
-												aria-sort="descending"
-												title="Last received, newest first"
-											>
-												Received
-											</th>
-										</tr>
-									</thead>
-									<tbody className={tableBodyClass}>
-										{rows.map((session) => (
-											<tr
-												key={session.id}
-												className="cursor-pointer hover:bg-hover focus-within:bg-hover"
-												onClick={(event) => {
-													if (
-														(event.target as HTMLElement).closest("button") ||
-														window.getSelection()?.toString() ||
-														event.ctrlKey ||
-														event.metaKey ||
-														event.shiftKey ||
-														event.altKey
-													)
-														return;
-													open(session);
-												}}
-											>
-												<td className="h-8 min-w-0 px-1.5 py-0 align-middle">
-													<Button
-														variant="ghost"
-														size="sm"
-														className="w-full min-w-0 justify-start"
-														data-session-id={session.id}
-														aria-label={`Open session ${session.title || "Untitled session"}, ${session.id.slice(0, 8)}, ${session.sourceSessionId}, ${session.contributorName}`}
-														onClick={() => open(session)}
-													>
-														<span
-															className={
-																session.title
-																	? "truncate text-fg"
-																	: "truncate text-fg-2"
-															}
-														>
-															{session.title || "Untitled session"}
-														</span>
-														<span className="shrink-0 font-mono text-2xs text-fg-3">
-															{session.id.slice(0, 8)}
-														</span>
-													</Button>
-													<div className="flex min-w-0 items-center gap-2 px-2.5 pb-2 sm:hidden">
-														{member.role === "admin" && (
-															<span className="max-w-1/3 truncate text-2xs text-fg-3">
-																{session.contributorName || "Unnamed"}
-															</span>
-														)}
-														<SessionLocation
-															repository={session.repository}
-															cwd={session.cwd}
-														/>
-													</div>
-												</td>
-												<td
-													className={
-														tableDenseCellClass + " hidden sm:table-cell"
-													}
-												>
-													<SessionLocation
-														repository={session.repository}
-														cwd={session.cwd}
-													/>
-												</td>
-												{member.role === "admin" && (
-													<td
-														className={
-															tableDenseCellClass + " hidden lg:table-cell"
-														}
-													>
-														<p className="truncate text-fg-2">
-															{session.contributorName || "Unnamed"}
-														</p>
-													</td>
-												)}
-												<td
-													className={
-														tableDenseCellClass + " hidden xl:table-cell"
-													}
-												>
-													<span className="text-fg-3">{session.source}</span>
-												</td>
-												<td
-													className={
-														tableDenseCellClass +
-														" hidden xl:table-cell text-right"
-													}
-												>
-													<span className="text-fg-3 tabular-nums">
-														{session.eventCount.toLocaleString()}
-													</span>
-												</td>
-												<td className={tableDenseCellClass}>
-													<time
-														dateTime={session.lastReceivedAt}
-														title={formatTime(session.lastReceivedAt)}
-														className="text-xs text-fg-3 tabular-nums"
-													>
-														{new Date(
-															session.lastReceivedAt,
-														).toLocaleDateString(undefined, {
-															month: "short",
-															day: "numeric",
-															year: "2-digit",
-														})}{" "}
-														<span className="hidden sm:inline">
-															{new Date(
-																session.lastReceivedAt,
-															).toLocaleTimeString(undefined, {
-																hour: "2-digit",
-																minute: "2-digit",
-																hour12: false,
-															})}
-														</span>
-													</time>
-												</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
+									Sessions appear here once a collector sends approved Claude
+									Code, Codex or Cursor work to this vault.
+								</EmptyState>
+							) : (
+								<EmptyState title="No sessions on this page">
+									Return to the previous page or refresh the archive.
+								</EmptyState>
+							)
+						) : (
+							<div className={tableFrameClass}>
+								<div
+									aria-hidden="true"
+									className={sessionHeaderClass + " " + columns}
+								>
+									<span>Session</span>
+									<span>Location</span>
+									{admin && <span>Contributor</span>}
+									<span className="text-right">Events</span>
+									<span>Received</span>
+								</div>
+								<ul
+									aria-label="Trace sessions"
+									className="m-0 list-none divide-y divide-line-subtle p-0"
+								>
+									{rows.map((session) => (
+										<li key={session.id}>
+											<SessionRow
+												session={session}
+												admin={admin}
+												columns={columns}
+												onOpen={() => open(session)}
+											/>
+										</li>
+									))}
+								</ul>
 							</div>
 						)}
 						<Pagination {...page} nextCursor={resource.data.nextCursor} />
@@ -358,5 +206,71 @@ export function Sessions({
 				/>
 			)}
 		</>
+	);
+}
+
+function SessionRow({
+	session,
+	admin,
+	columns,
+	onOpen,
+}: {
+	session: Session;
+	admin: boolean;
+	columns: string;
+	onOpen: () => void;
+}) {
+	const title = session.title || "Untitled session";
+	return (
+		<button
+			type="button"
+			data-session-id={session.id}
+			className={sessionRowClass + " " + columns}
+			aria-label={`Open session ${title}, ${sourceLabel(session.source)}, ${session.contributorName || "unnamed contributor"}, ${session.eventCount} events`}
+			onClick={onOpen}
+		>
+			<span className="min-w-0">
+				<span
+					className={
+						session.title
+							? "block truncate text-sm font-medium text-fg"
+							: "block truncate text-sm text-fg-3"
+					}
+					title={title}
+				>
+					{title}
+				</span>
+				<span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-2xs text-fg-3">
+					<SourceMark source={session.source} />
+					<span aria-hidden="true">·</span>
+					<span className="shrink-0 font-mono">{session.id.slice(0, 8)}</span>
+					{admin && (
+						<span className="min-w-0 truncate lg:hidden">
+							<span aria-hidden="true">· </span>
+							{session.contributorName || "Unnamed"}
+						</span>
+					)}
+				</span>
+			</span>
+			<span className="hidden min-w-0 lg:block">
+				<SessionLocation repository={session.repository} cwd={session.cwd} />
+			</span>
+			{admin && (
+				<span className="hidden min-w-0 text-xs lg:block">
+					<Person name={session.contributorName} />
+				</span>
+			)}
+			<span className="hidden text-right text-xs text-fg-3 tabular-nums lg:block">
+				{session.eventCount.toLocaleString()}
+			</span>
+			<span className="flex min-w-0 items-center justify-between gap-3 text-xs text-fg-3 tabular-nums sm:justify-end lg:justify-start">
+				<span className="min-w-0 lg:hidden">
+					<SessionLocation repository={session.repository} cwd={session.cwd} />
+				</span>
+				<span className="shrink-0">
+					<RelativeTime value={session.lastReceivedAt} />
+				</span>
+			</span>
+		</button>
 	);
 }
