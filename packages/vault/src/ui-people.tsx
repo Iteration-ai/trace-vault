@@ -1,17 +1,21 @@
 import { Fragment, useId, useRef, useState } from "react";
 import { z } from "zod";
 import {
+	Avatar,
+	Badge,
 	Button,
 	Feedback,
 	Field,
-	Heading,
 	Icon,
 	Input,
 	Notice,
+	PageHeader,
 	Pagination,
 	ResourceState,
 	Select,
+	StatusText,
 	api,
+	disclosureSummaryClass,
 	emptySchema,
 	formatTime,
 	memberSchema,
@@ -19,6 +23,7 @@ import {
 	tableBodyClass,
 	tableClasses,
 	tableDenseCellClass,
+	tableFrameClass,
 	tableHeaderCellClass,
 	tableHeadRowClass,
 	useAction,
@@ -43,28 +48,24 @@ export function People() {
 	const invitationId = useId();
 	return (
 		<>
-			<Heading title="People" description="Company members">
-				<div className="flex flex-wrap gap-1">
-					<Button
-						variant="ghost"
-						size="sm"
-						disabled={resource.loading}
-						onClick={resource.refresh}
-					>
-						Refresh
-					</Button>
-					<Button
-						variant="secondary"
-						size="sm"
-						aria-expanded={inviting}
-						aria-controls={invitationId}
-						id={`${invitationId}-trigger`}
-						onClick={() => setInviting(true)}
-					>
-						<Icon name="plus" size="sm" /> Invite
-					</Button>
-				</div>
-			</Heading>
+			<PageHeader title="People">
+				<Button
+					variant="secondary"
+					disabled={resource.loading}
+					onClick={resource.refresh}
+				>
+					Refresh
+				</Button>
+				<Button
+					variant={inviting ? "secondary" : "primary"}
+					aria-expanded={inviting}
+					aria-controls={invitationId}
+					id={`${invitationId}-trigger`}
+					onClick={() => setInviting(true)}
+				>
+					<Icon name="plus" size="sm" /> Invite
+				</Button>
+			</PageHeader>
 			{inviting && (
 				<InviteForm
 					id={invitationId}
@@ -82,70 +83,73 @@ export function People() {
 			>
 				{notice}
 			</p>
-			<ResourceState {...resource} retry={resource.refresh} />
+			<ResourceState
+				{...resource}
+				retry={resource.refresh}
+				label="Loading people"
+			/>
 			{resource.data && (
 				<>
-					<table className={tableClasses.compact + " table-fixed"}>
-						<caption className="sr-only">Company members</caption>
-						<thead>
-							<tr className={tableHeadRowClass}>
-								<th scope="col" className={tableHeaderCellClass}>
-									Member
-								</th>
-								<th
-									scope="col"
-									className={tableHeaderCellClass + " hidden md:table-cell"}
-								>
-									Email
-								</th>
-								<th
-									scope="col"
-									className={
-										tableHeaderCellClass + " hidden w-24 sm:table-cell"
-									}
-								>
-									Role
-								</th>
-								<th
-									scope="col"
-									className={
-										tableHeaderCellClass + " hidden w-24 sm:table-cell"
-									}
-								>
-									Access
-								</th>
-								<th scope="col" className={tableHeaderCellClass + " w-28"}>
-									<span className="sr-only">Actions</span>
-								</th>
-							</tr>
-						</thead>
-						<tbody className={tableBodyClass}>
-							{resource.data.items.map((member) => (
-								<MemberRow
-									key={member.id}
-									member={member}
-									onDone={() => {
-										setNotice("Member access updated.");
-										resource.refresh();
-										requestAnimationFrame(() => feedback.current?.focus());
-									}}
-								/>
-							))}
-							{!resource.data.items.length && (
-								<tr>
-									<td colSpan={5} className="px-4 py-6 text-sm text-fg-3">
-										No members on this page.
-									</td>
+					<div className={tableFrameClass}>
+						<table className={tableClasses.compact + " table-fixed"}>
+							<caption className="sr-only">Company members</caption>
+							<thead>
+								<tr className={tableHeadRowClass}>
+									<th scope="col" className={tableHeaderCellClass}>
+										Member
+									</th>
+									<th
+										scope="col"
+										className={
+											tableHeaderCellClass + " hidden w-36 sm:table-cell"
+										}
+									>
+										Role
+									</th>
+									<th
+										scope="col"
+										className={
+											tableHeaderCellClass + " hidden w-32 sm:table-cell"
+										}
+									>
+										Access
+									</th>
+									<th scope="col" className={tableHeaderCellClass + " w-28"}>
+										<span className="sr-only">Actions</span>
+									</th>
 								</tr>
-							)}
-						</tbody>
-					</table>
+							</thead>
+							<tbody className={tableBodyClass}>
+								{resource.data.items.map((member) => (
+									<MemberRow
+										key={member.id}
+										member={member}
+										onDone={() => {
+											setNotice("Member access updated.");
+											resource.refresh();
+											requestAnimationFrame(() => feedback.current?.focus());
+										}}
+									/>
+								))}
+								{!resource.data.items.length && (
+									<tr>
+										<td colSpan={4} className="px-4 py-6 text-sm text-fg-3">
+											No members on this page.
+										</td>
+									</tr>
+								)}
+							</tbody>
+						</table>
+					</div>
 					<Pagination {...page} nextCursor={resource.data.nextCursor} />
 				</>
 			)}
-			<details className="mt-4 text-xs text-fg-3">
-				<summary className="cursor-pointer">Access help</summary>
-				<div className="mt-2 grid gap-2 text-sm">
+			<details className="mt-5">
+				<summary className={disclosureSummaryClass}>
+					<Icon name="chevronRight" size="xs" />
+					What roles and access allow
+				</summary>
+				<div className="mt-3 grid max-w-[75ch] gap-2 text-sm text-fg-2">
 					<p>
 						Members can access their own traces. Administrators can access
 						company traces, manage people, and change repository policy.
@@ -175,41 +179,42 @@ function MemberRow({
 	const label = member.disabled ? "Enable" : "Disable";
 	return (
 		<Fragment>
-			<tr className="hover:bg-hover">
-				<td className={tableDenseCellClass}>
-					<p
-						className="truncate font-medium"
-						title={member.name || "Unnamed member"}
-					>
-						{member.name || "Unnamed member"}
-					</p>
-					<p
-						className="truncate text-xs text-fg-3 md:hidden"
-						title={member.email}
-					>
-						{member.email}
-					</p>
-					<p className="text-xs text-fg-3 sm:hidden">
-						{member.role === "admin" ? "Admin" : "Member"} ·{" "}
-						{member.disabled ? "Disabled" : "Enabled"}
-					</p>
-				</td>
-				<td className={tableDenseCellClass + " hidden md:table-cell"}>
-					<p className="truncate text-fg-2" title={member.email}>
-						{member.email}
-					</p>
+			<tr className={confirming ? "bg-hover" : "hover:bg-hover"}>
+				<td className={tableDenseCellClass + " h-12"}>
+					<div className="flex min-w-0 items-center gap-2.5">
+						<Avatar name={member.name || member.email} size="md" />
+						<div className="min-w-0">
+							<p
+								className="m-0 truncate font-medium text-fg"
+								title={member.name || "Unnamed member"}
+							>
+								{member.name || "Unnamed member"}
+							</p>
+							<p
+								className="m-0 truncate text-xs text-fg-3"
+								title={member.email}
+							>
+								{member.email}
+								<span className="sm:hidden">
+									{" · "}
+									{member.role === "admin" ? "Admin" : "Member"} ·{" "}
+									{member.disabled ? "Disabled" : "Active"}
+								</span>
+							</p>
+						</div>
+					</div>
 				</td>
 				<td className={tableDenseCellClass + " hidden sm:table-cell"}>
-					<span className="text-fg-2">
+					<Badge tone={member.role === "admin" ? "accent" : "neutral"}>
 						{member.role === "admin" ? "Admin" : "Member"}
-					</span>
+					</Badge>
 				</td>
 				<td className={tableDenseCellClass + " hidden sm:table-cell"}>
-					<span className={member.disabled ? "text-warn" : "text-fg-3"}>
-						{member.disabled ? "Disabled" : "Enabled"}
-					</span>
+					<StatusText tone={member.disabled ? "neutral" : "ok"}>
+						{member.disabled ? "Disabled" : "Active"}
+					</StatusText>
 				</td>
-				<td className={tableDenseCellClass}>
+				<td className={tableDenseCellClass + " text-right"}>
 					<Button
 						id={`${confirmationId}-trigger`}
 						variant="ghost"
@@ -226,10 +231,14 @@ function MemberRow({
 			</tr>
 			{confirming && (
 				<tr>
-					<td colSpan={5}>
+					<td colSpan={4} className="p-0">
 						<form
 							id={confirmationId}
-							className="grid gap-2 border-y border-line bg-surface px-4 py-3"
+							className={
+								member.disabled
+									? "grid gap-2 border-t border-line bg-surface px-4 py-3"
+									: "grid gap-2 border-t border-err/20 bg-err/5 px-4 py-3"
+							}
 							onSubmit={(event) => {
 								event.preventDefault();
 								void action.run(async () => {
@@ -299,9 +308,29 @@ function InviteForm({ id, onClose }: { id: string; onClose: () => void }) {
 	return (
 		<section
 			id={id}
-			aria-label="Invite a colleague"
-			className="mb-4 grid min-w-0 gap-3 border-y border-line py-3"
+			aria-labelledby={`${id}-title`}
+			className="mb-6 grid min-w-0 gap-4 rounded-lg border border-line bg-raised p-5 shadow-sm"
 		>
+			<div className="flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<h2 id={`${id}-title`} className="m-0 text-base font-semibold">
+						Invite a colleague
+					</h2>
+					<p className="mt-1 mb-0 max-w-[70ch] text-sm text-fg-3">
+						Creates a one-time link, not an email. Send it to the person through
+						a private channel you trust.
+					</p>
+				</div>
+				<Button
+					variant="ghost"
+					size="icon"
+					aria-label="Close invitation"
+					disabled={action.pending}
+					onClick={onClose}
+				>
+					<Icon name="close" size="sm" />
+				</Button>
+			</div>
 			<form
 				className="grid min-w-0 gap-2"
 				onSubmit={(event) => {
@@ -355,19 +384,10 @@ function InviteForm({ id, onClose }: { id: string; onClose: () => void }) {
 				</fieldset>
 				<Feedback action={action} />
 			</form>
-			<details className="text-xs text-fg-3">
-				<summary className="cursor-pointer">Invitation help</summary>
-				<p className="mt-2 text-sm">
-					Administrators can access company traces, manage people, and change
-					repository policy. Invitations create a one-time enrollment link, not
-					an email. Deliver it only to the intended person through a trusted
-					private channel.
-				</p>
-			</details>
 			{invitation && (
 				<section
 					aria-label="One-time enrollment link"
-					className="grid min-w-0 gap-2 border-t border-line pt-3"
+					className="grid min-w-0 gap-3 border-t border-line-subtle pt-4"
 				>
 					<Notice tone="warn">
 						This private link is held only in this page’s memory. Anyone with it
@@ -382,14 +402,14 @@ function InviteForm({ id, onClose }: { id: string; onClose: () => void }) {
 							onFocus={(event) => event.target.select()}
 						/>
 					</Field>
-					<p className="text-xs text-fg-3">
+					<p className="m-0 text-xs text-fg-3">
 						Expires {formatTime(invitation.expiresAt)}. Redeemable once. If
 						copying fails, select the link and copy it manually.
 					</p>
 					<Feedback action={copy} />
 					<div className="flex flex-wrap gap-1">
 						<Button
-							variant="secondary"
+							variant="primary"
 							size="sm"
 							disabled={copy.pending}
 							onClick={() => {
@@ -414,16 +434,6 @@ function InviteForm({ id, onClose }: { id: string; onClose: () => void }) {
 					</div>
 				</section>
 			)}
-			<div>
-				<Button
-					variant="ghost"
-					size="sm"
-					disabled={action.pending}
-					onClick={onClose}
-				>
-					Close invitation
-				</Button>
-			</div>
 		</section>
 	);
 }

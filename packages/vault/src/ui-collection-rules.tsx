@@ -1,13 +1,16 @@
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { fieldLabelClass } from "../../../src/shared/ui/field";
 import {
 	Button,
-	Heading,
+	Icon,
 	Input,
 	Notice,
+	PageHeader,
 	ResourceState,
+	Section,
 	Select,
 	api,
+	disclosureSummaryClass,
 	policySchema,
 	useAction,
 	useResource,
@@ -18,21 +21,46 @@ type AccountRow = Policy["accounts"][number] & { key: number };
 type LocationRow = { key: number; path: string };
 
 const accountGridClass =
-	"grid min-w-0 grid-cols-2 items-end gap-2 md:grid-cols-[7rem_minmax(0,1fr)_minmax(0,1fr)_4rem]";
-const disclosureClass =
-	"min-h-7 cursor-pointer py-1 text-sm text-fg-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+	"grid min-w-0 items-end gap-2 rounded-lg border border-line p-3 md:grid-cols-[8rem_minmax(0,1fr)_minmax(0,1fr)_auto] md:rounded-none md:border-0 md:p-0";
+
+const emptyListClass =
+	"m-0 rounded-lg border border-dashed border-line-strong px-4 py-3 text-sm text-fg-3";
 
 export function CaptureRules() {
 	const resource = useResource("/api/me/capture-rules", policySchema);
 	return (
 		<>
-			<Heading
+			<PageHeader
 				title="Collection rules"
-				description="Authorize work by account, repository or directory."
+				description="Which of your work may leave your computers. Any one approved account, repository or directory is enough."
 			/>
-			<ResourceState {...resource} retry={resource.refresh} />
+			<ResourceState
+				{...resource}
+				retry={resource.refresh}
+				label="Loading collection rules"
+			/>
 			{resource.data && <CaptureForm initial={resource.data} />}
 		</>
+	);
+}
+
+function Disclosure({
+	title,
+	children,
+}: {
+	title: string;
+	children: ReactNode;
+}) {
+	return (
+		<details>
+			<summary className={disclosureSummaryClass}>
+				<Icon name="chevronRight" size="xs" />
+				{title}
+			</summary>
+			<div className="mt-2 grid max-w-[75ch] gap-2 text-sm text-fg-2">
+				{children}
+			</div>
+		</details>
 	);
 }
 
@@ -101,16 +129,43 @@ function CaptureForm({ initial }: { initial: Policy }) {
 			}}
 		>
 			<fieldset disabled={action.pending} className="grid min-w-0">
-				<section
-					aria-labelledby={`${id}-accounts`}
-					className="grid min-w-0 gap-2 border-t border-line py-3"
+				<Section
+					id={`${id}-repositories`}
+					title="Company repositories"
+					description="Approved by your administrators for everyone in the vault."
 				>
-					<div className="flex flex-wrap items-center justify-between gap-2">
-						<h2 id={`${id}-accounts`} className="text-sm font-semibold">
-							Work accounts
-						</h2>
+					{policy.repositories.length ? (
+						<ul className="m-0 grid min-w-0 list-none divide-y divide-line-subtle rounded-lg border border-line p-0">
+							{policy.repositories.map((repository) => (
+								<li
+									key={repository}
+									className="flex h-9 min-w-0 items-center gap-2 px-3"
+								>
+									<Icon
+										name="repository"
+										size="sm"
+										className="shrink-0 text-fg-3"
+									/>
+									<span
+										className="truncate font-mono text-xs text-fg-2"
+										title={repository}
+									>
+										{repository}
+									</span>
+								</li>
+							))}
+						</ul>
+					) : (
+						<p className={emptyListClass}>No company repositories approved.</p>
+					)}
+				</Section>
+				<Section
+					id={`${id}-accounts`}
+					title="Work accounts"
+					description="Claude Code account IDs whose new requests may be collected."
+					action={
 						<Button
-							variant="ghost"
+							variant="secondary"
 							size="sm"
 							onClick={() => {
 								const key = nextAccountKey.current++;
@@ -126,20 +181,23 @@ function CaptureForm({ initial }: { initial: Policy }) {
 								setEdited(true);
 							}}
 						>
+							<Icon name="plus" size="sm" />
 							Add account
 						</Button>
-					</div>
+					}
+				>
 					{accounts.length === 0 ? (
-						<p className="text-fg-3">No work accounts authorized.</p>
+						<p className={emptyListClass}>No work accounts approved.</p>
 					) : (
-						<div className="grid min-w-0 gap-1">
+						<div className="grid min-w-0 gap-2">
 							<div
 								aria-hidden="true"
-								className="hidden gap-2 text-xs text-fg-3 md:grid md:grid-cols-[7rem_minmax(0,1fr)_minmax(0,1fr)_4rem]"
+								className="hidden gap-2 text-xs font-medium text-fg-3 md:grid md:grid-cols-[8rem_minmax(0,1fr)_minmax(0,1fr)_auto]"
 							>
 								<span>Provider</span>
 								<span>Account ID</span>
-								<span>Organization ID · optional</span>
+								<span>Organization ID (optional)</span>
+								<span className="w-8" />
 							</div>
 							{accounts.map((account, index) => (
 								<div key={account.key} className={accountGridClass}>
@@ -165,6 +223,7 @@ function CaptureForm({ initial }: { initial: Policy }) {
 											value={account.accountId}
 											autoComplete="off"
 											spellCheck={false}
+											className="font-mono"
 											onChange={(event) =>
 												editAccount(account.key, {
 													accountId: event.target.value,
@@ -174,12 +233,13 @@ function CaptureForm({ initial }: { initial: Policy }) {
 									</label>
 									<label className={fieldLabelClass + " min-w-0"}>
 										<span className="md:sr-only">
-											Organization ID · optional
+											Organization ID (optional)
 										</span>
 										<Input
 											value={account.organizationId ?? ""}
 											autoComplete="off"
 											spellCheck={false}
+											className="font-mono"
 											onChange={(event) =>
 												editAccount(account.key, {
 													organizationId: event.target.value || null,
@@ -189,9 +249,10 @@ function CaptureForm({ initial }: { initial: Policy }) {
 									</label>
 									<Button
 										variant="ghost"
-										size="sm"
+										size="icon"
 										className="justify-self-end"
 										aria-label={`Remove work account ${index + 1}`}
+										title="Remove"
 										onClick={() => {
 											setAccounts((rows) =>
 												rows.filter((row) => row.key !== account.key),
@@ -199,46 +260,36 @@ function CaptureForm({ initial }: { initial: Policy }) {
 											setEdited(true);
 										}}
 									>
-										Remove
+										<Icon name="trash" size="sm" />
 									</Button>
 								</div>
 							))}
 						</div>
 					)}
-					<details>
-						<summary className={disclosureClass}>
-							Account support & setup
-						</summary>
-						<div className="grid gap-2 pt-1 text-fg-2">
-							<p>
-								Account capture supports new terminal Claude Code 2.1.282
-								requests only. Run <code>account-setup</code> and{" "}
-								<code>approve-account</code> in the collector to select an
-								observed account and organization. Adding an ID here does not
-								enable telemetry or identify old messages. Codex and Cursor need
-								a repository or directory rule instead.
-							</p>
-							<p>
-								Use exact provider account IDs from your provider’s account
-								information or company collector instructions. Organization ID
-								is optional unless your provider requires it. Ask an
-								administrator if unsure; never substitute an email domain or
-								guess from historical trace labels. Do not enter passwords, API
-								keys or access tokens.
-							</p>
-						</div>
-					</details>
-				</section>
-				<section
-					aria-labelledby={`${id}-directories`}
-					className="grid min-w-0 gap-2 border-t border-line py-3"
-				>
-					<div className="flex flex-wrap items-center justify-between gap-2">
-						<h2 id={`${id}-directories`} className="text-sm font-semibold">
-							Research directories
-						</h2>
+					<Disclosure title="Which accounts are supported">
+						<p className="m-0">
+							Account capture supports new terminal Claude Code 2.1.282 requests
+							only. Run <code className="text-xs">account-setup</code> and{" "}
+							<code className="text-xs">approve-account</code> in the collector
+							to select an observed account and organization. Adding an ID here
+							does not enable telemetry or identify old messages. Codex and
+							Cursor need a repository or directory rule instead.
+						</p>
+						<p className="m-0">
+							Use exact provider account IDs from your provider’s account
+							information or your company’s collector instructions. Never
+							substitute an email domain or guess from historical trace labels,
+							and do not enter passwords, API keys or access tokens.
+						</p>
+					</Disclosure>
+				</Section>
+				<Section
+					id={`${id}-directories`}
+					title="Research directories"
+					description="Absolute paths for company work outside a repository."
+					action={
 						<Button
-							variant="ghost"
+							variant="secondary"
 							size="sm"
 							onClick={() => {
 								const key = nextLocationKey.current++;
@@ -246,14 +297,15 @@ function CaptureForm({ initial }: { initial: Policy }) {
 								setEdited(true);
 							}}
 						>
+							<Icon name="plus" size="sm" />
 							Add directory
 						</Button>
-					</div>
+					}
+				>
 					{locations.length === 0 ? (
-						<p className="text-fg-3">No extra research locations authorized.</p>
+						<p className={emptyListClass}>No research directories approved.</p>
 					) : (
-						<div className="grid min-w-0 gap-1">
-							<p className="text-xs text-fg-3">Absolute directory path</p>
+						<div className="grid min-w-0 gap-2">
 							{locations.map((location, index) => (
 								<div
 									key={location.key}
@@ -264,6 +316,7 @@ function CaptureForm({ initial }: { initial: Policy }) {
 											Absolute directory path {index + 1}
 										</span>
 										<Input
+											icon="folder"
 											value={location.path}
 											autoComplete="off"
 											spellCheck={false}
@@ -308,8 +361,9 @@ function CaptureForm({ initial }: { initial: Policy }) {
 									</label>
 									<Button
 										variant="ghost"
-										size="sm"
+										size="icon"
 										aria-label={`Remove directory ${index + 1}`}
+										title="Remove"
 										onClick={() => {
 											setLocations((rows) =>
 												rows.filter((row) => row.key !== location.key),
@@ -317,100 +371,64 @@ function CaptureForm({ initial }: { initial: Policy }) {
 											setEdited(true);
 										}}
 									>
-										Remove
+										<Icon name="trash" size="sm" />
 									</Button>
 								</div>
 							))}
 						</div>
 					)}
-					<details>
-						<summary className={disclosureClass}>Directory scope</summary>
-						<p className="pt-1 text-fg-2">
-							Approve absolute paths for company research outside repositories.
+					<Disclosure title="Choosing directories">
+						<p className="m-0">
 							Avoid broad home or personal directories. An empty list approves
-							no extra locations; company repository access is managed
-							separately.
+							no extra locations; company repositories are managed separately.
 						</p>
-					</details>
-				</section>
+					</Disclosure>
+				</Section>
 			</fieldset>
-			<section
-				aria-labelledby={`${id}-repositories`}
-				className="grid min-w-0 gap-2 border-t border-line py-3"
-			>
-				<div className="flex flex-wrap items-center gap-2">
-					<h2 id={`${id}-repositories`} className="text-sm font-semibold">
-						Company repositories
-					</h2>
-					<span className="text-xs text-fg-3">Managed by your company</span>
-				</div>
-				{policy.repositories.length ? (
-					<ul className="grid min-w-0 divide-y divide-line-subtle">
-						{policy.repositories.map((repository) => (
-							<li
-								key={repository}
-								className="min-w-0 py-1 break-all font-mono text-sm text-fg-2"
-							>
-								{repository}
-							</li>
-						))}
-					</ul>
-				) : (
-					<p className="text-fg-3">No company repositories approved.</p>
-				)}
-			</section>
-			<div className="grid gap-2 border-t border-line pt-3">
-				<p className="text-fg-2">
-					Saving authorizes the listed accounts and directories for company
-					collection.
-				</p>
-				<details>
-					<summary className={disclosureClass}>Privacy & authorization</summary>
-					<div className="grid gap-2 pt-1 text-fg-2">
-						<p>
-							An approved work account, company repository or research directory
-							can independently authorize eligible capture; they are
-							alternatives, not combined requirements. Personal activity is not
-							authorized by an email domain, a historical label or inferences
-							from trace content.
-						</p>
-						<p>
-							Removing rules changes future capture, not retained company trace
-							history. Clearing all accounts and directories removes those
-							approvals; company repository rules still apply.
-						</p>
-						<p className="text-xs text-fg-3">
-							Policy revision {policy.revision}
-						</p>
-					</div>
-				</details>
+			<div className="grid gap-3 border-t border-line pt-5">
+				<Disclosure title="Privacy and authorization">
+					<p className="m-0">
+						An approved work account, company repository or research directory
+						can each authorize eligible capture on its own. Personal activity is
+						never authorized by an email domain, a historical label or
+						inferences from trace content.
+					</p>
+					<p className="m-0">
+						Removing rules changes future capture, not sessions already in the
+						vault. Clearing every account and directory removes those approvals;
+						company repositories still apply.
+					</p>
+					<p className="m-0 text-xs text-fg-3">
+						Policy revision {policy.revision}
+					</p>
+				</Disclosure>
 				{action.error && (
 					<Notice tone="err">
 						{action.error} Your edits are kept. Save again to retry.
 					</Notice>
 				)}
-				<div className="flex flex-wrap items-center gap-3">
-					<Button
-						variant="primary"
-						size="sm"
-						type="submit"
-						disabled={action.pending}
-					>
+			</div>
+			{!edited && !action.pending && !action.error && action.success && (
+				<div className="mt-5">
+					<Notice tone="ok">{action.success}</Notice>
+				</div>
+			)}
+			{(edited || action.pending || action.error) && (
+				<div className="sticky bottom-4 z-10 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-canvas/95 px-4 py-3 shadow-md backdrop-blur-md">
+					<p role="status" className="m-0 text-sm text-fg-2">
+						{action.pending
+							? "Saving; editing is locked."
+							: "Unsaved changes. Saving approves the listed accounts and directories."}
+					</p>
+					<Button variant="primary" type="submit" disabled={action.pending}>
 						{action.pending
 							? "Saving…"
 							: action.error
 								? "Retry save"
 								: "Save rules"}
 					</Button>
-					<p role="status" className="text-xs text-fg-3">
-						{action.pending
-							? "Saving; editing is temporarily locked."
-							: edited
-								? "Unsaved changes"
-								: action.success}
-					</p>
 				</div>
-			</div>
+			)}
 		</form>
 	);
 }

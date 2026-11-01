@@ -1,21 +1,31 @@
 import { Fragment, useRef, useState } from "react";
 import { z } from "zod";
+import { ToolLogo } from "../../../src/shared/ui/tool-logos";
 import {
 	Button,
+	CopyCommand,
+	EmptyState,
 	Feedback,
-	Field,
-	Heading,
+	Icon,
+	PageHeader,
 	Pagination,
+	Person,
 	ResourceState,
-	Select,
+	SourceMark,
+	StatusText,
 	api,
 	codeBlockClass,
+	disclosureSummaryClass,
 	emptySchema,
+	formatDay,
 	formatTime,
 	pageSchema,
+	segmentedGroupClass,
+	segmentedItemClasses,
 	tableBodyClass,
 	tableClasses,
 	tableDenseCellClass,
+	tableFrameClass,
 	tableHeaderCellClass,
 	tableHeadRowClass,
 	useAction,
@@ -29,52 +39,59 @@ const devicesSchema = pageSchema(
 		name: z.string(),
 		source: z.string(),
 		memberId: z.string(),
+		memberName: z.string(),
 		createdAt: z.string(),
 		revoked: z.boolean(),
 	}),
 );
+type Device = z.infer<typeof devicesSchema>["items"][number];
+
+const sources = [
+	{ value: "claude", label: "Claude Code" },
+	{ value: "codex", label: "Codex" },
+	{ value: "cursor", label: "Cursor" },
+] as const;
 
 export function Collectors({ onRules }: { onRules: () => void }) {
 	const page = usePage();
 	const resource = useResource(`/api/devices${page.query}`, devicesSchema);
 	const action = useAction();
 	const [setup, setSetup] = useState<boolean | null>(null);
-	const [selected, setSelected] = useState<string>();
-	const [confirming, setConfirming] = useState(false);
+	const [confirming, setConfirming] = useState<string>();
 	const [actionTarget, setActionTarget] = useState<string>();
 	const feedback = useRef<HTMLDivElement>(null);
-	const setupOpen =
-		setup ??
-		(page.page === 1 &&
-			resource.data?.items.length === 0 &&
-			!resource.data.nextCursor);
+	const empty =
+		page.page === 1 &&
+		resource.data?.items.length === 0 &&
+		!resource.data.nextCursor;
+	const setupOpen = setup ?? empty;
 	return (
 		<>
-			<Heading title="Collectors" description="Collection access to this vault">
-				<div className="flex flex-wrap gap-1">
-					<Button
-						variant="ghost"
-						size="sm"
-						disabled={resource.loading || action.pending}
-						onClick={resource.refresh}
-					>
-						Refresh
-					</Button>
-					<Button
-						variant="secondary"
-						size="sm"
-						aria-expanded={!!setupOpen}
-						aria-controls="collector-setup"
-						onClick={() => setSetup(!setupOpen)}
-					>
-						Enroll collector
-					</Button>
-				</div>
-			</Heading>
+			<PageHeader
+				title="Collectors"
+				description="Computers enrolled to send approved sessions to this vault"
+			>
+				<Button
+					variant="secondary"
+					disabled={resource.loading || action.pending}
+					onClick={resource.refresh}
+				>
+					Refresh
+				</Button>
+				<Button
+					variant={setupOpen ? "secondary" : "primary"}
+					aria-expanded={!!setupOpen}
+					aria-controls="collector-setup"
+					onClick={() => setSetup(!setupOpen)}
+				>
+					<Icon name={setupOpen ? "close" : "plus"} size="sm" />
+					{setupOpen ? "Close setup" : "Enroll a collector"}
+				</Button>
+			</PageHeader>
 			<section id="collector-setup" hidden={!setupOpen}>
 				{setupOpen && <CollectorSetup onRules={onRules} />}
 			</section>
-			<div ref={feedback} tabIndex={-1} className="grid gap-2">
+			<div ref={feedback} tabIndex={-1} className="mb-3 grid gap-2 empty:mb-0">
 				{!confirming && (
 					<Feedback
 						action={{
@@ -86,289 +103,145 @@ export function Collectors({ onRules }: { onRules: () => void }) {
 					/>
 				)}
 			</div>
-			<ResourceState {...resource} retry={resource.refresh} />
+			<ResourceState
+				{...resource}
+				retry={resource.refresh}
+				label="Loading collectors"
+			/>
 			{resource.data && (
 				<>
 					{resource.data.items.length ? (
-						<table className={tableClasses.compact + " table-fixed"}>
-							<caption className="sr-only">Enrolled collectors</caption>
-							<thead>
-								<tr className={tableHeadRowClass}>
-									<th scope="col" className={tableHeaderCellClass}>
-										Collector
-									</th>
-									<th
-										scope="col"
-										className={
-											tableHeaderCellClass + " hidden w-24 sm:table-cell"
-										}
-									>
-										Source
-									</th>
-									<th
-										scope="col"
-										className={
-											tableHeaderCellClass + " hidden w-32 lg:table-cell"
-										}
-									>
-										Owner
-									</th>
-									<th
-										scope="col"
-										className={
-											tableHeaderCellClass + " hidden w-48 xl:table-cell"
-										}
-									>
-										Enrolled
-									</th>
-									<th
-										scope="col"
-										className={
-											tableHeaderCellClass + " hidden w-24 sm:table-cell"
-										}
-									>
-										Access
-									</th>
-									<th scope="col" className={tableHeaderCellClass + " w-20"}>
-										<span className="sr-only">Details</span>
-									</th>
-								</tr>
-							</thead>
-							<tbody className={tableBodyClass}>
-								{resource.data.items.map((device) => (
-									<Fragment key={device.id}>
-										<tr
+						<div className={tableFrameClass}>
+							<table className={tableClasses.compact + " table-fixed"}>
+								<caption className="sr-only">Enrolled collectors</caption>
+								<thead>
+									<tr className={tableHeadRowClass}>
+										<th scope="col" className={tableHeaderCellClass}>
+											Collector
+										</th>
+										<th
+											scope="col"
 											className={
-												selected === device.id
-													? "bg-selected"
-													: "hover:bg-hover"
+												tableHeaderCellClass + " hidden w-36 md:table-cell"
 											}
 										>
-											<td className={tableDenseCellClass}>
-												<div className="flex min-w-0 items-center gap-2">
-													<span className="truncate" title={device.name}>
-														{device.name || "Unnamed collector"}
-													</span>
-													<span className="hidden shrink-0 font-mono text-xs text-fg-3 sm:inline">
-														{device.id.slice(0, 8)}
-													</span>
-												</div>
-												<p className="truncate text-xs text-fg-3 sm:hidden">
-													{device.source} ·{" "}
-													{device.revoked ? "Revoked" : "Enrolled"}
-												</p>
-											</td>
-											<td
-												className={
-													tableDenseCellClass + " hidden sm:table-cell"
+											Source
+										</th>
+										<th
+											scope="col"
+											className={
+												tableHeaderCellClass + " hidden w-44 lg:table-cell"
+											}
+										>
+											Owner
+										</th>
+										<th
+											scope="col"
+											className={
+												tableHeaderCellClass + " hidden w-32 sm:table-cell"
+											}
+										>
+											Enrolled
+										</th>
+										<th scope="col" className={tableHeaderCellClass + " w-28"}>
+											Access
+										</th>
+										<th scope="col" className={tableHeaderCellClass + " w-24"}>
+											<span className="sr-only">Actions</span>
+										</th>
+									</tr>
+								</thead>
+								<tbody className={tableBodyClass}>
+									{resource.data.items.map((device) => (
+										<Fragment key={device.id}>
+											<DeviceRow
+												device={device}
+												confirming={confirming === device.id}
+												disabled={action.pending}
+												onRevoke={() =>
+													setConfirming(
+														confirming === device.id ? undefined : device.id,
+													)
 												}
-											>
-												<span className="block truncate" title={device.source}>
-													{device.source}
-												</span>
-											</td>
-											<td
-												className={
-													tableDenseCellClass + " hidden lg:table-cell"
-												}
-											>
-												<span
-													className="block truncate font-mono text-xs text-fg-3"
-													title={device.memberId}
-												>
-													{device.memberId.slice(0, 8)}
-												</span>
-											</td>
-											<td
-												className={
-													tableDenseCellClass + " hidden xl:table-cell"
-												}
-											>
-												<span
-													className="block truncate text-fg-3"
-													title={formatTime(device.createdAt)}
-												>
-													{formatTime(device.createdAt)}
-												</span>
-											</td>
-											<td
-												className={
-													tableDenseCellClass + " hidden sm:table-cell"
-												}
-											>
-												<span
-													className={device.revoked ? "text-warn" : "text-fg-3"}
-												>
-													{device.revoked ? "Revoked" : "Enrolled"}
-												</span>
-											</td>
-											<td className={tableDenseCellClass}>
-												<Button
-													variant="ghost"
-													size="sm"
-													disabled={action.pending}
-													aria-label={`Details for ${device.name || "unnamed collector"} (${device.id})`}
-													aria-expanded={selected === device.id}
-													aria-controls={
-														selected === device.id
-															? "collector-details"
-															: undefined
-													}
-													onClick={() => {
-														setSelected(
-															selected === device.id ? undefined : device.id,
-														);
-														setConfirming(false);
-													}}
-												>
-													{selected === device.id ? "Hide" : "View"}
-												</Button>
-											</td>
-										</tr>
-										{selected === device.id && (
-											<tr>
-												<td colSpan={6}>
-													<section
-														id="collector-details"
-														aria-label="Collector details"
-														className="grid gap-3 px-4 py-3 text-sm"
-													>
-														<p className="break-all font-medium">
-															{device.name || "Unnamed collector"}
-														</p>
-														<dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-															<div>
-																<dt className="text-xs text-fg-3">
-																	Collector ID
-																</dt>
-																<dd className="break-all font-mono text-xs">
-																	{device.id}
-																</dd>
-															</div>
-															<div>
-																<dt className="text-xs text-fg-3">
-																	Owner member ID
-																</dt>
-																<dd className="break-all font-mono text-xs">
-																	{device.memberId}
-																</dd>
-															</div>
-															<div>
-																<dt className="text-xs text-fg-3">Source</dt>
-																<dd className="break-all">{device.source}</dd>
-															</div>
-															<div>
-																<dt className="text-xs text-fg-3">Enrolled</dt>
-																<dd className="break-all">
-																	{formatTime(device.createdAt)}
-																</dd>
-															</div>
-														</dl>
-														<p className="text-xs text-fg-3">
-															{device.revoked
-																? "Access revoked. Existing company traces are retained."
-																: "Enrollment grants collection access; it does not indicate a running collector."}
-														</p>
-														{!device.revoked &&
-															(confirming ? (
-																<form
-																	className="grid gap-2 border-t border-line pt-3"
-																	onSubmit={(event) => {
-																		event.preventDefault();
-																		setActionTarget(device.id);
-																		void action.run(async () => {
-																			await api(
-																				`/api/devices/${encodeURIComponent(device.id)}`,
-																				emptySchema,
-																				{ method: "DELETE" },
-																			);
-																			setConfirming(false);
-																			feedback.current?.focus();
-																			resource.refresh();
-																		}, `Collector ${device.id} revoked. Existing company traces are retained.`);
-																	}}
+											/>
+											{confirming === device.id && (
+												<tr>
+													<td colSpan={6} className="p-0">
+														<form
+															id={`revoke-${device.id}`}
+															className="grid gap-2 border-t border-err/20 bg-err/5 px-4 py-3"
+															onSubmit={(event) => {
+																event.preventDefault();
+																setActionTarget(device.id);
+																void action.run(
+																	async () => {
+																		await api(
+																			`/api/devices/${encodeURIComponent(device.id)}`,
+																			emptySchema,
+																			{ method: "DELETE" },
+																		);
+																		setConfirming(undefined);
+																		feedback.current?.focus();
+																		resource.refresh();
+																	},
+																	`${device.name || "Collector"} revoked. Its sessions stay in the vault.`,
+																);
+															}}
+														>
+															<p className="m-0 text-sm font-medium">
+																Revoke {device.name || "this collector"}?
+															</p>
+															<p className="m-0 max-w-[70ch] text-sm text-fg-2">
+																It can no longer send activity; collecting again
+																needs a new enrollment. Sessions it already sent
+																stay in the vault.
+															</p>
+															<Feedback
+																action={{
+																	...action,
+																	success: undefined,
+																	error:
+																		actionTarget === device.id
+																			? action.error
+																			: undefined,
+																}}
+															/>
+															<div className="flex flex-wrap gap-2">
+																<Button
+																	variant="danger"
+																	size="sm"
+																	type="submit"
+																	disabled={action.pending}
+																	autoFocus
 																>
-																	<p className="font-medium">
-																		Revoke this collector?
-																	</p>
-																	<p className="text-xs text-fg-2">
-																		It will no longer be authorized to send
-																		activity. Re-enrollment is required to
-																		collect again. Existing company traces are
-																		retained.
-																	</p>
-																	<Feedback
-																		action={{
-																			...action,
-																			success: undefined,
-																			error:
-																				actionTarget === device.id
-																					? action.error
-																					: undefined,
-																		}}
-																	/>
-																	<div className="flex flex-wrap gap-2">
-																		<Button
-																			variant="danger"
-																			size="sm"
-																			type="submit"
-																			disabled={action.pending}
-																		>
-																			{action.pending
-																				? "Revoking…"
-																				: "Confirm revoke collector"}
-																		</Button>
-																		<Button
-																			id="collector-revoke-cancel"
-																			variant="ghost"
-																			size="sm"
-																			disabled={action.pending}
-																			onClick={() => {
-																				setConfirming(false);
-																				requestAnimationFrame(() =>
-																					document
-																						.getElementById("collector-revoke")
-																						?.focus(),
-																				);
-																			}}
-																		>
-																			Cancel
-																		</Button>
-																	</div>
-																</form>
-															) : (
-																<div>
-																	<Button
-																		id="collector-revoke"
-																		variant="ghost"
-																		size="sm"
-																		onClick={() => {
-																			setConfirming(true);
-																			requestAnimationFrame(() =>
-																				document
-																					.getElementById(
-																						"collector-revoke-cancel",
-																					)
-																					?.focus(),
-																			);
-																		}}
-																	>
-																		Revoke collector
-																	</Button>
-																</div>
-															))}
-													</section>
-												</td>
-											</tr>
-										)}
-									</Fragment>
-								))}
-							</tbody>
-						</table>
+																	{action.pending
+																		? "Revoking…"
+																		: "Revoke collector"}
+																</Button>
+																<Button
+																	variant="ghost"
+																	size="sm"
+																	disabled={action.pending}
+																	onClick={() => setConfirming(undefined)}
+																>
+																	Cancel
+																</Button>
+															</div>
+														</form>
+													</td>
+												</tr>
+											)}
+										</Fragment>
+									))}
+								</tbody>
+							</table>
+						</div>
 					) : (
-						<p className="border-y border-line py-6 text-sm text-fg-3">
-							No collectors on this page.
-						</p>
+						!setupOpen && (
+							<EmptyState title="No collectors on this page">
+								Return to the previous page or refresh the list.
+							</EmptyState>
+						)
 					)}
 					<fieldset
 						disabled={action.pending}
@@ -379,105 +252,203 @@ export function Collectors({ onRules }: { onRules: () => void }) {
 							{...page}
 							nextCursor={resource.data.nextCursor}
 							previous={() => {
-								if (!action.pending) {
-									setSelected(undefined);
-									setConfirming(false);
-									page.previous();
-								}
+								setConfirming(undefined);
+								page.previous();
 							}}
 							next={(cursor) => {
-								setSelected(undefined);
-								setConfirming(false);
+								setConfirming(undefined);
 								page.next(cursor);
 							}}
 						/>
 					</fieldset>
 				</>
 			)}
+			{!!resource.data?.items.length && (
+				<p className="mt-4 text-xs text-fg-3">
+					Enrollment grants permission to send activity; it does not show
+					whether a collector is running.
+				</p>
+			)}
 		</>
 	);
 }
 
+function DeviceRow({
+	device,
+	confirming,
+	disabled,
+	onRevoke,
+}: {
+	device: Device;
+	confirming: boolean;
+	disabled: boolean;
+	onRevoke: () => void;
+}) {
+	return (
+		<tr className={confirming ? "bg-hover" : "hover:bg-hover"}>
+			<td className={tableDenseCellClass + " h-12"}>
+				<div className="min-w-0">
+					<p
+						className="m-0 truncate font-medium text-fg"
+						title={device.name || "Unnamed collector"}
+					>
+						{device.name || "Unnamed collector"}
+					</p>
+					<p
+						className="m-0 truncate font-mono text-2xs text-fg-3"
+						title={`Collector ID ${device.id}`}
+					>
+						{device.id.slice(0, 8)}
+						<span className="font-sans md:hidden">
+							{" · "}
+							<SourceMark source={device.source} />
+						</span>
+					</p>
+				</div>
+			</td>
+			<td className={tableDenseCellClass + " hidden text-fg-2 md:table-cell"}>
+				<SourceMark source={device.source} />
+			</td>
+			<td className={tableDenseCellClass + " hidden lg:table-cell"}>
+				<span title={`Member ID ${device.memberId}`}>
+					<Person name={device.memberName} />
+				</span>
+			</td>
+			<td className={tableDenseCellClass + " hidden text-fg-3 sm:table-cell"}>
+				<time dateTime={device.createdAt} title={formatTime(device.createdAt)}>
+					{formatDay(device.createdAt)}
+				</time>
+			</td>
+			<td className={tableDenseCellClass}>
+				<StatusText tone={device.revoked ? "neutral" : "ok"}>
+					{device.revoked ? "Revoked" : "Enrolled"}
+				</StatusText>
+			</td>
+			<td className={tableDenseCellClass + " text-right"}>
+				{!device.revoked && (
+					<Button
+						variant="ghost"
+						size="sm"
+						disabled={disabled}
+						aria-expanded={confirming}
+						aria-controls={confirming ? `revoke-${device.id}` : undefined}
+						aria-label={`Revoke ${device.name || "unnamed collector"} (${device.id})`}
+						onClick={onRevoke}
+					>
+						Revoke
+					</Button>
+				)}
+			</td>
+		</tr>
+	);
+}
+
 function CollectorSetup({ onRules }: { onRules: () => void }) {
-	const [source, setSource] = useState("claude");
+	const [source, setSource] =
+		useState<(typeof sources)[number]["value"]>("claude");
 	const origin = window.location.origin;
 	return (
-		<div className="mb-4 grid gap-3 border-y border-line py-3">
-			<div className="flex flex-wrap items-end gap-3">
-				<div className="w-40">
-					<Field label="Source">
-						<Select
-							value={source}
-							onChange={(event) => setSource(event.target.value)}
-						>
-							<option value="claude">Claude Code</option>
-							<option value="codex">Codex</option>
-							<option value="cursor">Cursor</option>
-						</Select>
-					</Field>
+		<div className="mb-6 grid gap-5 rounded-lg border border-line bg-raised p-5 shadow-sm">
+			<div className="flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<h2 className="m-0 text-base font-semibold">Connect a computer</h2>
+					<p className="mt-1 mb-0 max-w-[70ch] text-sm text-fg-3">
+						Run these in an interactive terminal on the machine that holds the
+						sessions. You confirm the vault and enter your password in private
+						prompts; never paste tokens or passwords into commands.
+					</p>
 				</div>
-				<Button variant="ghost" size="sm" onClick={onRules}>
-					Review collection rules
-				</Button>
+				<div
+					role="radiogroup"
+					aria-label="Agent"
+					className={segmentedGroupClass}
+				>
+					{sources.map((option) => (
+						<button
+							key={option.value}
+							type="button"
+							role="radio"
+							aria-checked={source === option.value}
+							className={
+								(source === option.value
+									? segmentedItemClasses.selected
+									: segmentedItemClasses.idle) + " gap-1.5"
+							}
+							onClick={() => setSource(option.value)}
+						>
+							<ToolLogo name={option.value} className="size-3.5" />
+							{option.label}
+						</button>
+					))}
+				</div>
 			</div>
-			<p className="text-xs text-fg-3">
-				Use your company-provided CLI build in an interactive terminal. Review
-				authorized scopes before approving collection.
+			<div className="grid gap-4">
+				<CopyCommand
+					label="Approve this computer and its matching history"
+					command={`trace-vault connect ${source} --vault ${origin}`}
+				/>
+				<CopyCommand
+					label="Keep collecting in the foreground (stop with Ctrl-C)"
+					command={`trace-vault collect ${source} --vault ${origin}`}
+				/>
+			</div>
+			<p className="m-0 text-xs text-fg-3">
+				Only work matching your{" "}
+				<button
+					type="button"
+					className="rounded-sm text-fg-2 underline decoration-line-strong underline-offset-4 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+					onClick={onRules}
+				>
+					collection rules
+				</button>{" "}
+				leaves the machine: an approved repository, work account or research
+				directory. Refresh this list after enrolling.
 			</p>
-			<pre
-				className={codeBlockClass}
-			>{`trace-vault connect ${source} --vault ${origin}\ntrace-vault collect ${source} --vault ${origin}`}</pre>
 			<details>
-				<summary className="min-h-7 cursor-pointer text-xs text-fg-2 focus-visible:outline-2 focus-visible:outline-accent">
-					Authorization & setup help
+				<summary className={disclosureSummaryClass}>
+					<Icon name="chevronRight" size="xs" />
+					Installation, accounts and other directories
 				</summary>
-				<div className="mt-2 grid gap-2 text-xs text-fg-3">
-					<p>
-						Confirm the company in the native prompts. Enter passwords and
-						invitation tokens only at private prompts; never put tokens, cookies
-						or passwords in commands. A public package or global installation is
-						not assumed.
+				<div className="mt-3 grid max-w-[75ch] gap-2 text-sm text-fg-2">
+					<p className="m-0">
+						Use the collector build your company provides; a public package or
+						global installation is not assumed. Collect runs until you stop it
+						and installs no startup service.
 					</p>
-					<p>
-						Connecting approves matching existing history and ongoing
-						collection. Collect runs in the foreground; stop with Ctrl-C. No
-						startup service is installed. Refresh this list after enrollment.
-					</p>
-					<p>
-						Only approved repositories, exact supported work-account IDs, or
-						explicitly approved directories may contribute. For research outside
-						a repository, add an approved absolute root with the connect option{" "}
-						<code className="font-mono">
+					<p className="m-0">
+						For research outside a repository, approve an absolute directory
+						with{" "}
+						<code className="font-mono text-xs">
 							--location /absolute/approved-root
-						</code>
-						. Unknown historical labels are not verified ownership.
+						</code>{" "}
+						when connecting. Historical labels are not verified ownership.
 					</p>
 					{source === "claude" ? (
 						<>
-							<p>
-								Account capture supports terminal Claude Code 2.1.282 only.
-								Repository and location capture do not require account setup. To
-								enable metadata-only local OTLP, run account-setup, restart
-								Claude, keep collect running, submit a request, then approve the
-								observed account and organization:
+							<p className="m-0">
+								Account capture supports terminal Claude Code 2.1.282 only and
+								is not needed for repository or directory collection. To enable
+								metadata-only local OTLP, run account-setup, restart Claude,
+								keep collect running, send a request, then approve the observed
+								account and organization:
 							</p>
 							<pre
 								className={codeBlockClass}
 							>{`trace-vault account-setup claude --vault ${origin}\ntrace-vault approve-account claude --vault ${origin}`}</pre>
 						</>
 					) : (
-						<p>
-							Account capture is unsupported for{" "}
-							{source === "codex" ? "Codex" : "Cursor"}; native account labels
-							are not contemporaneous identity evidence. Use repository or
-							approved location scopes.
+						<p className="m-0">
+							Account capture is not supported for{" "}
+							{source === "codex" ? "Codex" : "Cursor"}; its account labels are
+							not contemporaneous identity evidence. Use repository or directory
+							rules.
 						</p>
 					)}
 					{source === "cursor" && (
-						<p>
-							Cursor transcripts without per-record workspace evidence require
-							an explicitly selected transcript-storage root. Project labels do
-							not prove repository ownership.
+						<p className="m-0">
+							Cursor transcripts without per-record workspace evidence need an
+							explicitly selected transcript-storage root. Project labels do not
+							prove repository ownership.
 						</p>
 					)}
 				</div>

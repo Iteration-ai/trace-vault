@@ -386,7 +386,13 @@ async function traces(
 }
 
 const document =
-	'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Trace vault</title><link rel="stylesheet" href="/vault.css"></head><body class="bg-canvas text-fg"><div id="root"></div><script type="module" src="/vault.js"></script></body></html>';
+	'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Trace Vault</title><link rel="icon" href="/icon.svg" type="image/svg+xml"><link rel="preload" href="/inter.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="/vault.css"></head><body class="bg-canvas text-fg"><div id="root"></div><script type="module" src="/vault.js"></script></body></html>';
+const assetTypes: Record<string, string> = {
+	"/vault.js": "text/javascript",
+	"/vault.css": "text/css",
+	"/inter.woff2": "font/woff2",
+	"/icon.svg": "image/svg+xml",
+};
 
 export function createVaultServer(
 	store: VaultStore,
@@ -408,7 +414,8 @@ export function createVaultServer(
 			response.end(document);
 			return true;
 		}
-		if (!["/vault.js", "/vault.css"].includes(route)) return false;
+		const contentType = assetTypes[route];
+		if (!contentType) return false;
 		let asset = assets.get(route);
 		if (!asset) {
 			asset = await readFile(
@@ -416,9 +423,7 @@ export function createVaultServer(
 			);
 			assets.set(route, asset);
 		}
-		response.writeHead(200, {
-			"Content-Type": route.endsWith(".css") ? "text/css" : "text/javascript",
-		});
+		response.writeHead(200, { "Content-Type": contentType });
 		response.end(asset);
 		return true;
 	}
