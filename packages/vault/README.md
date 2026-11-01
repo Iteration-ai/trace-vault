@@ -102,8 +102,8 @@ device tokens remain valid until revoked or their member is disabled.
 | `GET, PUT /api/me/capture-rules` | Member session | Own account/location rules plus company repositories |
 | `PUT /api/settings/policy` | Admin session | Company repository rules |
 | `POST /api/invitations`, `GET /api/members`, `PATCH /api/members/:id` | Admin session | Invitation and access management |
-| `GET /api/devices`, `DELETE /api/devices/:id` | Owner/admin session | Paginated devices and revocation |
-| `GET /api/audit` | Admin session | Secret-free administrative audit |
+| `GET /api/devices`, `DELETE /api/devices/:id` | Owner/admin session | Paginated devices with owner names, and revocation |
+| `GET /api/audit` | Admin session | Secret-free administrative audit, newest first, with actor names |
 | `POST /api/collector/enroll` | Member session | Source-specific device token |
 | `GET /api/collector/policy` | Device | Current capture permissions/revision |
 | `POST /api/traces/ingest` | Device | Capture-authorized trace batch; 202 acknowledgement, 409 stale revision |

@@ -93,6 +93,9 @@ const uuidSchema = z.uuid();
 const sessionCursorSchema = z
 	.object({ at: z.iso.datetime(), id: uuidSchema })
 	.strict();
+const auditCursorSchema = z
+	.object({ at: z.iso.datetime(), id: uuidSchema })
+	.strict();
 const eventCursorSchema = z
 	.object({ sequence: z.number().int(), eventId: z.string(), id: uuidSchema })
 	.strict();
@@ -643,8 +646,12 @@ export class VaultStore {
 			human(actor);
 			return paged(
 				await tx
-					.select(deviceFields)
+					.select({ ...deviceFields, memberName: tables.members.name })
 					.from(tables.devices)
+					.innerJoin(
+						tables.members,
+						eq(tables.members.id, tables.devices.memberId),
+					)
 					.where(
 						and(
 							actor.role === "admin"
@@ -996,18 +1003,46 @@ export class VaultStore {
 	}
 
 	async listAudit(caller: VaultCaller, page: VaultPageRequest = {}) {
-		const { limit, after } = pagination(page);
+		const { limit } = pagination(page, true);
+		const after = cursor(page.after, auditCursorSchema);
 		return this.authorized(caller, false, async (tx, actor) => {
 			admin(actor);
-			return paged(
-				await tx
-					.select()
-					.from(tables.auditEntries)
-					.where(after ? gt(tables.auditEntries.id, after) : undefined)
-					.orderBy(asc(tables.auditEntries.id))
-					.limit(limit + 1),
-				limit,
-			);
+			const rows = await tx
+				.select({
+					id: tables.auditEntries.id,
+					action: tables.auditEntries.action,
+					actorId: tables.auditEntries.actorId,
+					actorName: tables.members.name,
+					targetId: tables.auditEntries.targetId,
+					createdAt: tables.auditEntries.createdAt,
+					cursorAt: sql<string>`to_char(${tables.auditEntries.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+				})
+				.from(tables.auditEntries)
+				.leftJoin(
+					tables.members,
+					eq(tables.members.id, tables.auditEntries.actorId),
+				)
+				.where(
+					after
+						? sql`(${tables.auditEntries.createdAt}, ${tables.auditEntries.id}) < (${after.at}::timestamptz, ${after.id}::uuid)`
+						: undefined,
+				)
+				.orderBy(
+					desc(tables.auditEntries.createdAt),
+					desc(tables.auditEntries.id),
+				)
+				.limit(limit + 1);
+			const items = rows
+				.slice(0, limit)
+				.map(({ cursorAt: _cursorAt, ...row }) => row);
+			const last = rows[Math.min(rows.length, limit) - 1];
+			return {
+				items,
+				nextCursor:
+					rows.length > limit && last
+						? encodeCursor({ at: last.cursorAt, id: last.id })
+						: null,
+			};
 		});
 	}
 }
