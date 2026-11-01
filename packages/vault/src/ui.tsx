@@ -139,11 +139,7 @@ function VaultApplication() {
 		setState({ kind: "authenticated", identity });
 	}
 	return (
-		<div
-			data-theme="light"
-			data-theme-scope="document"
-			className="min-h-screen bg-canvas font-sans text-fg"
-		>
+		<div className="min-h-screen bg-canvas font-sans text-fg">
 			{state.kind === "loading" && (
 				<AccessFrame>
 					<p role="status" className="py-8 text-sm text-fg-3">
@@ -707,11 +703,7 @@ class VaultErrorBoundary extends Component<
 	render() {
 		if (this.state.failed)
 			return (
-				<div
-					data-theme="light"
-					data-theme-scope="document"
-					className="min-h-screen bg-canvas text-fg"
-				>
+				<div className="min-h-screen bg-canvas text-fg">
 					<AccessFrame>
 						<Heading
 							title="Unable to display the vault"

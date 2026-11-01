@@ -386,7 +386,7 @@ async function traces(
 }
 
 const document =
-	'<!doctype html><html lang="en" data-theme="light" data-theme-scope="document"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Trace vault</title><link rel="stylesheet" href="/vault.css"></head><body class="bg-canvas text-fg"><div id="root"></div><script type="module" src="/vault.js"></script></body></html>';
+	'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Trace vault</title><link rel="stylesheet" href="/vault.css"></head><body class="bg-canvas text-fg"><div id="root"></div><script type="module" src="/vault.js"></script></body></html>';
 
 export function createVaultServer(
 	store: VaultStore,

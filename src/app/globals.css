@@ -3,45 +3,45 @@
 @theme static {
 	--color-*: initial;
 
-	--color-canvas: #08090a;
-	--color-surface: #0e0f11;
-	--color-raised: #141517;
-	--color-overlay: #1a1b1e;
-	--color-hover: rgb(255 255 255 / 4%);
-	--color-selected: rgb(255 255 255 / 7%);
+	--color-canvas: #ffffff;
+	--color-surface: #fafafa;
+	--color-raised: #ffffff;
+	--color-overlay: #ffffff;
+	--color-hover: rgb(17 17 19 / 4%);
+	--color-selected: rgb(17 17 19 / 7%);
 
-	--color-fg: #f7f8f8;
-	--color-fg-2: #d0d3d9;
-	--color-fg-3: #8a8f98;
-	--color-fg-4: #666a71;
+	--color-fg: #111113;
+	--color-fg-2: #5d5f66;
+	--color-fg-3: #6b6e76;
+	--color-fg-4: #8b8e96;
 
-	--color-line-subtle: rgb(255 255 255 / 5%);
-	--color-line: rgb(255 255 255 / 8%);
-	--color-line-strong: rgb(255 255 255 / 14%);
+	--color-line-subtle: rgb(17 17 19 / 6%);
+	--color-line: rgb(17 17 19 / 9%);
+	--color-line-strong: rgb(17 17 19 / 14%);
 
-	--color-primary: #eeeff1;
-	--color-primary-hover: #ffffff;
-	--color-primary-fg: #08090a;
+	--color-primary: #111113;
+	--color-primary-hover: #2c2c31;
+	--color-primary-fg: #ffffff;
 
-	--color-accent: #b89be7;
-	--color-accent-fg: #08090a;
+	--color-accent: #111113;
+	--color-accent-fg: #ffffff;
 
-	--color-ok: #4cc38a;
-	--color-warn: #e5b454;
-	--color-err: #eb6f6f;
-	--color-info: #5aa9f5;
+	--color-ok: #16804a;
+	--color-warn: #946200;
+	--color-err: #c03a2b;
+	--color-info: #1f6bc4;
 
-	--color-actor-human: #e3b56f;
-	--color-actor-agent: #ef8fbf;
-	--color-actor-review: #6cb2f0;
-	--color-actor-tool: #47c1c7;
+	--color-actor-human: #8f6116;
+	--color-actor-agent: #b23f79;
+	--color-actor-review: #2c6aad;
+	--color-actor-tool: #1b7479;
 
-	--color-chart-1: #b89be7;
-	--color-chart-2: #5aa9f5;
-	--color-chart-3: #47c1c7;
-	--color-chart-4: #e3b56f;
-	--color-chart-5: #ef8fbf;
-	--color-chart-6: #5b5f66;
+	--color-chart-1: #6f56b8;
+	--color-chart-2: #2f7fd6;
+	--color-chart-3: #1f9aa0;
+	--color-chart-4: #c98a1c;
+	--color-chart-5: #cf4f93;
+	--color-chart-6: #a6a9b0;
 
 	--font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 	--font-mono:
@@ -133,17 +133,10 @@
 	--shadow-sm: var(--elevation-sm);
 	--shadow-md: var(--elevation-md);
 	--shadow-lg: var(--elevation-lg);
-	--elevation-sm:
-		0 1px 0 0 rgb(255 255 255 / 5%) inset, 0 1px 2px 0 rgb(0 0 0 / 40%);
+	--elevation-sm: 0 1px 2px 0 rgb(17 17 19 / 6%);
 	--elevation-md:
-		0 0 0 1px rgb(0 0 0 / 20%), 0 1px 0 0 rgb(255 255 255 / 4%) inset,
-		0 12px 32px -8px rgb(0 0 0 / 55%);
-	--elevation-lg:
-		0 1px 0 0 rgb(255 255 255 / 5%) inset, 0 40px 100px -24px rgb(0 0 0 / 60%);
-	--shadow-light-sm: 0 1px 2px 0 rgb(17 17 19 / 6%);
-	--shadow-light-md:
 		0 1px 2px 0 rgb(17 17 19 / 4%), 0 12px 32px -18px rgb(17 17 19 / 18%);
-	--shadow-light-lg:
+	--elevation-lg:
 		0 1px 2px 0 rgb(17 17 19 / 4%), 0 40px 90px -30px rgb(17 17 19 / 22%);
 
 	--ease-*: initial;
@@ -211,59 +204,9 @@
 :root {
 	background-color: var(--color-canvas);
 	color: var(--color-fg);
-	color-scheme: dark;
+	color-scheme: light;
 	font-synthesis: none;
 	text-rendering: optimizeLegibility;
-}
-
-/* Document scope also covers provider portals and the overscroll canvas. */
-[data-theme="light"],
-:root:has([data-theme="light"][data-theme-scope="document"]) {
-	color-scheme: light;
-
-	--color-canvas: #ffffff;
-	--color-surface: #fafafa;
-	--color-raised: #ffffff;
-	--color-overlay: #ffffff;
-	--color-hover: rgb(17 17 19 / 4%);
-	--color-selected: rgb(17 17 19 / 7%);
-
-	--color-fg: #111113;
-	--color-fg-2: #5d5f66;
-	--color-fg-3: #6b6e76;
-	--color-fg-4: #8b8e96;
-
-	--color-line-subtle: rgb(17 17 19 / 6%);
-	--color-line: rgb(17 17 19 / 9%);
-	--color-line-strong: rgb(17 17 19 / 14%);
-
-	--color-primary: #111113;
-	--color-primary-hover: #2c2c31;
-	--color-primary-fg: #ffffff;
-
-	--color-accent: #111113;
-	--color-accent-fg: #ffffff;
-
-	--color-ok: #16804a;
-	--color-warn: #946200;
-	--color-err: #c03a2b;
-	--color-info: #1f6bc4;
-
-	--color-actor-human: #8f6116;
-	--color-actor-agent: #b23f79;
-	--color-actor-review: #2c6aad;
-	--color-actor-tool: #1b7479;
-
-	--color-chart-1: #6f56b8;
-	--color-chart-2: #2f7fd6;
-	--color-chart-3: #1f9aa0;
-	--color-chart-4: #c98a1c;
-	--color-chart-5: #cf4f93;
-	--color-chart-6: #a6a9b0;
-
-	--elevation-sm: var(--shadow-light-sm);
-	--elevation-md: var(--shadow-light-md);
-	--elevation-lg: var(--shadow-light-lg);
 }
 
 /* The marketing layout is composed at 1920×1080: rem-based type and spacing
