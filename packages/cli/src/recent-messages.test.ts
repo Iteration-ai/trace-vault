@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 import type { TraceEvent } from "iteration-trace-contracts";
+import { parseClaudeLine } from "./claude-transcript.js";
 import { collectorTick, scanSourceOnce } from "./collector.js";
 import type { CollectorFetcher } from "./collector-fetch.js";
 import {
+	appendEvents,
 	type CollectorConfig,
 	collectorPaths,
 	nextBatch,
@@ -199,4 +202,36 @@ test("vault collection refuses to send recent messages first", async (context) =
 		),
 		/Vault collection does not send recent messages first/,
 	);
+});
+
+test("a collector waiting on a full outbox still reports its history and newest messages", async (context) => {
+	const f = await fixture(context);
+	const [template] = parseClaudeLine(
+		JSON.stringify(record(SESSIONS[0]!, "assistant", "filler", "filler")),
+		`/tmp/p/${SESSIONS[0]}.jsonl`,
+		0,
+	).events;
+	assert.ok(template);
+	// Twelve 3 MB events hold the outbox above the 32 MiB scan pause.
+	await appendEvents(
+		Array.from({ length: 12 }, (_, index) => ({
+			...template,
+			eventId: createHash("sha256").update(`filler ${index}`).digest("hex"),
+			payload: { text: "x".repeat(3_000_000) },
+		})),
+		f.paths,
+	);
+	const busy: CollectorFetcher = async () =>
+		new Response("{}", { status: 429, headers: { "retry-after": "5" } });
+	const result = await collectorTick(
+		f.config,
+		f.paths,
+		busy,
+		undefined,
+		undefined,
+		{ recentMessages: 50 },
+	);
+	assert.equal(result.discovered, 0);
+	assert.deepEqual(result.history, { sessions: 3, readSessions: 0 });
+	assert.deepEqual(result.recentMessages, { sent: 0, complete: false });
 });

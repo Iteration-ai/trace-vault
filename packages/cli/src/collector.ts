@@ -49,6 +49,7 @@ import {
 	type CollectorConfig,
 	type CollectorPaths,
 	type CollectorState,
+	type SourceFile,
 } from "./storage.js";
 
 const MAX_SCAN_BYTES_PER_FILE = 16 * 1024 * 1024;
@@ -390,18 +391,38 @@ export async function scanSourceOnce(
 		},
 		paths,
 	);
-	const sessions = sessionFiles.filter((file) => file.session);
 	return {
 		discovered: events.length,
 		excludedRecords,
 		caughtUp,
-		history: {
-			sessions: sessions.length,
-			readSessions: sessions.filter(
-				(file) => (cursors[file.filename] ?? 0) >= file.size,
-			).length,
-		},
+		history: historyProgress(sessionFiles, cursors),
 	};
+}
+
+function historyProgress(
+	files: readonly SourceFile[],
+	cursors: Readonly<Record<string, number>>,
+): HistoryProgress {
+	const sessions = files.filter((file) => file.session);
+	return {
+		sessions: sessions.length,
+		readSessions: sessions.filter(
+			(file) => (cursors[file.filename] ?? 0) >= file.size,
+		).length,
+	};
+}
+
+// A paused scan reads nothing, so its progress comes from the files listed
+// now and the checkpoint the last scan saved.
+async function savedHistoryProgress(
+	config: CollectorConfig,
+	paths: CollectorPaths,
+): Promise<HistoryProgress> {
+	const files = await sourceFilesNewestFirst(
+		collectorSource(config),
+		path.resolve(collectorSourceDirectory(config)),
+	);
+	return historyProgress(files, (await loadState(paths)).cursors);
 }
 
 async function readRange(
@@ -716,7 +737,7 @@ export async function collectorTick(
 		uploaded: number;
 		outboxBytes: number;
 		historyCaughtUp: boolean;
-		history: HistoryProgress | null;
+		history: HistoryProgress;
 		recentMessages: RecentMessagesProgress | null;
 		retryAfterMs: number;
 	}>
@@ -767,7 +788,12 @@ export async function collectorTick(
 	);
 	const scan =
 		(await outboxSize(paths)) >= SCAN_PAUSE_OUTBOX_BYTES
-			? { discovered: 0, excludedRecords: 0, caughtUp: false, history: null }
+			? {
+					discovered: 0,
+					excludedRecords: 0,
+					caughtUp: false,
+					history: await savedHistoryProgress(config, paths),
+				}
 			: await scanSourceOnce(config, paths, signal, policy, accounts);
 	if (policy !== undefined && scan.caughtUp) {
 		const state = await loadState(paths);
