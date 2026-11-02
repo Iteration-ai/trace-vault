@@ -55,6 +55,7 @@ export {
 	collectorLogger,
 	configureCollectorLogging,
 	createLogger,
+	type LogWriter,
 } from "./logger.js";
 export { ensurePrivateDirectory } from "./private-storage.js";
 export { redactTraceEvent } from "./redact-trace.js";
