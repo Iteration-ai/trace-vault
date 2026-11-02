@@ -35,13 +35,16 @@ import {
 	appendEvents,
 	collectorSource,
 	collectorSourceDirectory,
+	loadRecentMessages,
 	loadState,
 	nextBatch,
 	outboxSize,
 	pendingEventIds,
+	queuedUserMessageIds,
 	redactPendingOutbox,
 	rewritePendingEvents,
 	sourceFilesNewestFirst,
+	saveRecentMessages,
 	saveState,
 	type CollectorConfig,
 	type CollectorPaths,
@@ -67,6 +70,13 @@ const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
 export type HistoryProgress = Readonly<{
 	sessions: number;
 	readSessions: number;
+}>;
+
+// The person's newest messages sent ahead of the rest of their history:
+// how many the server has acknowledged, and whether the pass is over.
+export type RecentMessagesProgress = Readonly<{
+	sent: number;
+	complete: boolean;
 }>;
 
 export class TraceUploadError extends Error {
@@ -394,6 +404,180 @@ export async function scanSourceOnce(
 	};
 }
 
+async function readRange(
+	filename: string,
+	start: number,
+	length: number,
+): Promise<Buffer> {
+	const handle = await fs.open(filename, "r");
+	try {
+		const buffer = Buffer.alloc(length);
+		const result = await handle.read(buffer, 0, length, start);
+		return buffer.subarray(0, result.bytesRead);
+	} finally {
+		await handle.close();
+	}
+}
+
+// The person's messages among the complete records of `buffer`, read from
+// `start`, until `room` are found. Returns where reading stopped.
+async function messagesInRecords(
+	source: CollectorSource,
+	filename: string,
+	buffer: Buffer,
+	start: number,
+	room: number,
+	queuedIds: ReadonlySet<string>,
+): Promise<Readonly<{ events: readonly TraceEvent[]; consumed: number }>> {
+	const events: TraceEvent[] = [];
+	let lineStart = 0;
+	for (let index = 0; index < buffer.length; index += 1) {
+		if (events.length >= room) break;
+		if (buffer[index] !== 10) continue;
+		let lineBytes = buffer.subarray(lineStart, index);
+		if (lineBytes.at(-1) === 13) lineBytes = lineBytes.subarray(0, -1);
+		const byteOffset = start + lineStart;
+		lineStart = index + 1;
+		if (lineBytes.length > MAX_RECORD_BYTES) continue;
+		let line: string;
+		try {
+			line = UTF8_DECODER.decode(lineBytes);
+		} catch {
+			continue;
+		}
+		const { events: parsed } = parseSourceRecord(
+			source,
+			line,
+			filename,
+			byteOffset,
+		);
+		for (const record of parsed) {
+			if (record.eventType !== "user_message" || queuedIds.has(record.eventId))
+				continue;
+			const event = await redactTraceEvent(record);
+			if (Buffer.byteLength(JSON.stringify(event), "utf8") <= MAX_EVENT_BYTES)
+				events.push(event);
+		}
+	}
+	return { events, consumed: lineStart };
+}
+
+// Reads ahead of the main scan, newest session first, queuing only the
+// person's messages until `limit` or the end of the history. Messages the main
+// scan already queued count first. The main scan queues them all again later;
+// the server keeps one copy.
+async function queueRecentMessages(
+	config: CollectorConfig,
+	paths: CollectorPaths,
+	limit: number | undefined,
+	signal?: AbortSignal,
+): Promise<ReadonlySet<string> | undefined> {
+	if (limit === undefined) return undefined;
+	const recent = (await loadRecentMessages(paths)) ?? {
+		version: 1 as const,
+		cursors: {},
+		queued: [...(await queuedUserMessageIds(paths, limit))],
+		sent: 0,
+		scanned: false,
+	};
+	if (recent.scanned) return new Set(recent.queued);
+	const source = collectorSource(config);
+	const mainCursors = (await loadState(paths)).cursors;
+	const files = await sourceFilesNewestFirst(
+		source,
+		path.resolve(collectorSourceDirectory(config)),
+	);
+	const queuedIds = await pendingEventIds(paths);
+	const cursors = { ...recent.cursors };
+	const queued = [...recent.queued];
+	const events: TraceEvent[] = [];
+	let budget = MAX_SCAN_BYTES_PER_TICK;
+	let reachedEnd = true;
+	for (const file of files) {
+		signal?.throwIfAborted();
+		const room = limit - recent.sent - queued.length;
+		const start = Math.max(
+			cursors[file.filename] ?? 0,
+			mainCursors[file.filename] ?? 0,
+		);
+		if (room <= 0 || start >= file.size) continue;
+		const length = Math.min(file.size - start, MAX_SCAN_BYTES_PER_FILE, budget);
+		const buffer = await readRange(file.filename, start, length);
+		budget -= buffer.length;
+		const found = await messagesInRecords(
+			source,
+			file.filename,
+			buffer,
+			start,
+			room,
+			queuedIds,
+		);
+		for (const event of found.events) {
+			events.push(event);
+			queued.push(event.eventId);
+			queuedIds.add(event.eventId);
+		}
+		// The main scan owns a record longer than one read; this pass moves past
+		// a file holding nothing else it can read.
+		const stuck = found.consumed === 0 && length === MAX_SCAN_BYTES_PER_FILE;
+		cursors[file.filename] = stuck ? file.size : start + found.consumed;
+		if (buffer.length < file.size - start || budget === 0) {
+			reachedEnd = false;
+			if (budget === 0) break;
+		}
+	}
+	await appendEvents(events, paths);
+	await saveRecentMessages(
+		{
+			version: 1,
+			cursors,
+			queued,
+			sent: recent.sent,
+			scanned: recent.sent + queued.length >= limit || reachedEnd,
+		},
+		paths,
+	);
+	return new Set(queued);
+}
+
+// Counts the pass's messages the server acknowledged since the last tick.
+async function settleRecentMessages(
+	paths: CollectorPaths,
+	limit: number | undefined,
+): Promise<RecentMessagesProgress | null> {
+	if (limit === undefined) return null;
+	const recent = await loadRecentMessages(paths);
+	if (recent === null) return { sent: 0, complete: false };
+	if (recent.queued.length === 0)
+		return { sent: recent.sent, complete: recent.scanned };
+	const pending = await pendingEventIds(paths);
+	const queued = recent.queued.filter((id) => pending.has(id));
+	const sent = recent.sent + recent.queued.length - queued.length;
+	if (queued.length !== recent.queued.length)
+		await saveRecentMessages(
+			{
+				...recent,
+				queued,
+				sent,
+				cursors: recent.scanned && queued.length === 0 ? {} : recent.cursors,
+			},
+			paths,
+		);
+	return { sent, complete: recent.scanned && queued.length === 0 };
+}
+
+function checkedRecentLimit(
+	config: CollectorConfig,
+	limit: number | undefined,
+): number | undefined {
+	if (limit === undefined) return undefined;
+	if (!Number.isSafeInteger(limit) || limit < 1)
+		throw new Error("The recent message limit must be a positive integer.");
+	if (config.destination === "vault")
+		throw new Error("Vault collection does not send recent messages first.");
+	return limit;
+}
+
 function isConsumedHook(
 	source: CollectorSource,
 	filename: string,
@@ -432,12 +616,13 @@ async function uploadPendingOnce(
 	signal?: AbortSignal,
 	onAcknowledged?: () => void,
 	policy?: VaultCapturePolicy,
+	first?: ReadonlySet<string>,
 ): Promise<Readonly<{ uploaded: number; retryAfterMs: number | null }>> {
 	let uploaded = 0;
 	for (let attempt = 0; attempt < MAX_UPLOADS_PER_TICK; attempt += 1) {
 		signal?.throwIfAborted();
 		await recheckQueuedAccounts(config, paths, policy);
-		const batch = await nextBatch(paths, MAX_UPLOAD_BYTES);
+		const batch = await nextBatch(paths, MAX_UPLOAD_BYTES, first);
 		if (batch.length === 0) return { uploaded, retryAfterMs: null };
 		const body = JSON.stringify({ events: batch });
 		if (Buffer.byteLength(body, "utf8") > MAX_REQUEST_BYTES) {
@@ -515,12 +700,15 @@ async function recheckQueuedAccounts(
 	);
 }
 
+// With `recentMessages`, the person's newest messages, up to that many, are
+// sent ahead of the rest of their history.
 export async function collectorTick(
 	config: CollectorConfig,
 	paths: CollectorPaths,
 	fetcher: CollectorFetcher = collectorFetch,
 	signal?: AbortSignal,
 	onAcknowledged?: () => void,
+	options: Readonly<{ recentMessages?: number }> = {},
 ): Promise<
 	Readonly<{
 		discovered: number;
@@ -529,9 +717,11 @@ export async function collectorTick(
 		outboxBytes: number;
 		historyCaughtUp: boolean;
 		history: HistoryProgress | null;
+		recentMessages: RecentMessagesProgress | null;
 		retryAfterMs: number;
 	}>
 > {
+	const recentLimit = checkedRecentLimit(config, options.recentMessages);
 	const accounts = await vaultAccountIndex(config);
 	const policy =
 		config.destination === "vault"
@@ -565,6 +755,7 @@ export async function collectorTick(
 		}
 	}
 	await redactPendingOutbox(paths);
+	const first = await queueRecentMessages(config, paths, recentLimit, signal);
 	let upload = await uploadPendingOnce(
 		config,
 		paths,
@@ -572,6 +763,7 @@ export async function collectorTick(
 		signal,
 		onAcknowledged,
 		policy,
+		first,
 	);
 	const scan =
 		(await outboxSize(paths)) >= SCAN_PAUSE_OUTBOX_BYTES
@@ -593,6 +785,7 @@ export async function collectorTick(
 			signal,
 			onAcknowledged,
 			policy,
+			first,
 		);
 		upload = { ...next, uploaded: upload.uploaded + next.uploaded };
 	}
@@ -603,6 +796,7 @@ export async function collectorTick(
 		outboxBytes: await outboxSize(paths),
 		historyCaughtUp: scan.caughtUp,
 		history: scan.history,
+		recentMessages: await settleRecentMessages(paths, recentLimit),
 		retryAfterMs: upload.retryAfterMs ?? 0,
 	};
 }

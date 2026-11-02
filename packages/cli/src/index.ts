@@ -31,6 +31,7 @@ export {
 export {
 	collectorTick,
 	type HistoryProgress,
+	type RecentMessagesProgress,
 	scanSourceOnce,
 	TraceUploadError,
 } from "./collector.js";
