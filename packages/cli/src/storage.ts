@@ -79,6 +79,7 @@ export type CollectorPaths = Readonly<{
 	lock: string;
 	historyBackfill: string;
 	health: string;
+	recentMessages: string;
 }>;
 
 const connectionSchema = {
@@ -227,6 +228,7 @@ export function collectorPaths(directory: string): CollectorPaths {
 		lock: path.join(directory, "collector.lock"),
 		historyBackfill: path.join(directory, "history-backfill.json"),
 		health: path.join(directory, "health.json"),
+		recentMessages: path.join(directory, "recent-messages.json"),
 	};
 }
 
@@ -532,9 +534,37 @@ export async function redactPendingOutbox(
 	await writeJsonAtomic(paths.redactionMarker, { version: 1 });
 }
 
+// Every queued line starts with its event ID, so a priority set can pick
+// lines without decoding the whole outbox.
+function queuedEventId(line: string): string | null {
+	const prefix = '{"eventId":"';
+	if (!line.startsWith(prefix)) return null;
+	const end = line.indexOf('"', prefix.length);
+	return end < 0 ? null : line.slice(prefix.length, end);
+}
+
+// The person's messages already queued, in queue order, at most `limit`.
+export async function queuedUserMessageIds(
+	paths: CollectorPaths,
+	limit: number,
+): Promise<readonly string[]> {
+	const ids: string[] = [];
+	if ((await outboxSize(paths)) === 0) return ids;
+	for await (const line of outboxLines(paths.outbox)) {
+		if (ids.length >= limit) break;
+		if (!line.includes('"eventType":"user_message"')) continue;
+		const id = queuedEventId(line);
+		if (id !== null) ids.push(id);
+	}
+	return ids;
+}
+
+// The next upload, in queue order except that events named in `first` go
+// ahead of the rest.
 export async function nextBatch(
 	paths: CollectorPaths,
 	maxBytes: number,
+	first: ReadonlySet<string> = new Set(),
 ): Promise<readonly TraceEvent[]> {
 	if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
 		throw new Error("Maximum upload batch size must be a positive integer.");
@@ -543,9 +573,23 @@ export async function nextBatch(
 	if (size === 0) return [];
 	if (size > MAX_OUTBOX_BYTES)
 		throw new Error("Trace outbox exceeds its configured capacity.");
+	const priority: string[] = [];
+	const rest: string[] = [];
+	for await (const line of outboxLines(paths.outbox)) {
+		const id = first.size === 0 ? null : queuedEventId(line);
+		if (id !== null && first.has(id)) {
+			if (priority.length < MAX_TRACE_EVENTS_PER_BATCH) priority.push(line);
+		} else if (rest.length < MAX_TRACE_EVENTS_PER_BATCH) rest.push(line);
+		if (
+			first.size === 0
+				? rest.length === MAX_TRACE_EVENTS_PER_BATCH
+				: priority.length === MAX_TRACE_EVENTS_PER_BATCH
+		)
+			break;
+	}
 	const events: TraceEvent[] = [];
 	let bytes = 0;
-	for await (const line of outboxLines(paths.outbox)) {
+	for (const line of [...priority, ...rest]) {
 		const lineBytes = Buffer.byteLength(line, "utf8") + 1;
 		if (
 			events.length >= MAX_TRACE_EVENTS_PER_BATCH ||
@@ -560,6 +604,58 @@ export async function nextBatch(
 		bytes += lineBytes;
 	}
 	return events;
+}
+
+const recentMessagesSchema = z
+	.object({
+		version: z.literal(1),
+		cursors: z.record(
+			z.string(),
+			z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+		),
+		// Queued by the pass and not yet acknowledged.
+		queued: z.array(z.string()),
+		sent: z.number().int().min(0),
+		scanned: z.boolean(),
+	})
+	.strict();
+
+export type RecentMessagesState = z.infer<typeof recentMessagesSchema>;
+
+// Null until the pass first runs for this connection.
+export async function loadRecentMessages(
+	paths: CollectorPaths,
+): Promise<RecentMessagesState | null> {
+	let contents: string;
+	try {
+		contents = await fs.readFile(paths.recentMessages, "utf8");
+	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT")
+			return null;
+		throw error;
+	}
+	let decoded: unknown;
+	try {
+		decoded = JSON.parse(contents);
+	} catch (error) {
+		throw new Error("Collector recent message state is not valid JSON.", {
+			cause: error,
+		});
+	}
+	const parsed = recentMessagesSchema.safeParse(decoded);
+	if (!parsed.success)
+		throw new Error("Collector recent message state has an invalid shape.", {
+			cause: parsed.error,
+		});
+	return parsed.data;
+}
+
+export async function saveRecentMessages(
+	state: RecentMessagesState,
+	paths: CollectorPaths,
+): Promise<void> {
+	await ensurePrivateDirectory(path.dirname(paths.recentMessages));
+	await writeJsonAtomic(paths.recentMessages, state);
 }
 
 export async function acknowledgeEvents(

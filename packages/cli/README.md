@@ -56,6 +56,9 @@ and restarting. Do not delete collector state or queued events to recover a lock
 - `collectorTick`, `scanSourceOnce`, `TraceUploadError`: bounded native scans,
   redaction, retryable durable outbox upload and acknowledgement. Accept an
   optional `CollectorFetcher` and cancellation signal at the transport boundary.
+  `collectorTick`'s `recentMessages` option sends up to that many of the
+  person's newest user messages ahead of the rest of a history import and
+  reports how many were acknowledged; vault collection rejects it.
 - Storage/config/state/health functions and types: version-compatible local data.
   `collectorPaths` requires an explicit directory; no product directory or
   enrollment endpoint is chosen for callers. Existing optional workspace
