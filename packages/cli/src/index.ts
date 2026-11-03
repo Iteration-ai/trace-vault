@@ -39,6 +39,7 @@ export {
 export { type CollectorFetcher, collectorFetch } from "./collector-fetch.js";
 export {
 	acquireCollectorLock,
+	tryAcquireCollectorLock,
 	waitForCollectorLock,
 } from "./collector-lock.js";
 export {

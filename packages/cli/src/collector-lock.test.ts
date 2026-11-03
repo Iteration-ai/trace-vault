@@ -8,6 +8,7 @@ import { test, type TestContext } from "node:test";
 import * as z from "zod";
 import {
 	acquireCollectorLock,
+	tryAcquireCollectorLock,
 	collectorPaths,
 	waitForCollectorLock,
 } from "./index.js";
@@ -252,3 +253,24 @@ for (const suffix of ["", ".owner"]) {
 		}
 	});
 }
+
+test("a passive worker can take over a released collector lease without hiding filesystem failures", async (context) => {
+	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "vault-lease-"));
+	context.after(() => fs.rm(directory, { recursive: true, force: true }));
+	const paths = collectorPaths(path.join(directory, "worker"));
+	const first = await acquireCollectorLock(paths);
+	context.after(first);
+	assert.equal(await tryAcquireCollectorLock(paths), null);
+	await first();
+	const next = await tryAcquireCollectorLock(paths);
+	assert.notEqual(next, null);
+	context.after(next!);
+	assert.equal(await tryAcquireCollectorLock(paths), null);
+	await next!();
+	const blocked = path.join(directory, "file");
+	await fs.writeFile(blocked, "not a directory");
+	await assert.rejects(
+		tryAcquireCollectorLock(collectorPaths(path.join(blocked, "worker"))),
+		{ code: "ENOTDIR" },
+	);
+});

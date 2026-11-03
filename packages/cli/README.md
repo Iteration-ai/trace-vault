@@ -85,8 +85,11 @@ on accepted responses as well as rejected ones.
   metadata and file formats remain readable for deployed collectors/rollback.
 - `sourceHome`, Claude/Codex/Cursor parsers, Git helpers, redaction and hook-queue
   readers: native collection without product enrollment or hook installation.
-- `acquireCollectorLock`, `waitForCollectorLock`, `ensurePrivateDirectory` and
+- `acquireCollectorLock`, `tryAcquireCollectorLock`, `waitForCollectorLock`, `ensurePrivateDirectory` and
   Windows PowerShell helpers: shared single-writer and private-storage machinery.
+  `tryAcquireCollectorLock` returns `null` while another owner holds the lock;
+  filesystem and storage failures still reject. Passive workers can retry and
+  take ownership after the current worker exits without parsing error messages.
 - Vault policy authorization, enrollment, account evidence and metadata-only
   Claude receiver/setup functions: self-hosted native capture, independent of
   any Iteration account. Unsupported identity evidence fails closed.
