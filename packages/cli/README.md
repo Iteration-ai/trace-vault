@@ -68,6 +68,11 @@ Older binaries reject the host destination in config rather than uploading its
 queue as an unscoped connection. Callers must stop older services before saving
 that config. Native agent session files remain the history source.
 
+For more than one destination, supply `batchKey` on the host policy. Each
+upload then contains one key, so an accepted batch can be acknowledged before
+another destination is retried. The host fetcher must preserve `Retry-After`
+on accepted responses as well as rejected ones.
+
 - `collectorTick`, `scanSourceOnce`, `TraceUploadError`: bounded native scans,
   redaction, retryable durable outbox upload and acknowledgement. Accept an
   optional `CollectorFetcher` and cancellation signal at the transport boundary.

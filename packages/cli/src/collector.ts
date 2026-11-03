@@ -70,6 +70,7 @@ const SCAN_PAUSE_OUTBOX_BYTES = 32 * 1024 * 1024;
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
 
 export type HostCapturePolicy = Readonly<{
+	batchKey?: (event: TraceEvent) => string;
 	revision: number;
 	authorizeRecord: (
 		source: CollectorSource,
@@ -665,6 +666,17 @@ function retryAfterMs(response: Response): number | null {
 		: 5000;
 }
 
+function captureBatch(
+	pending: readonly TraceEvent[],
+	host: HostCapturePolicy | undefined,
+): readonly TraceEvent[] {
+	const first = pending[0];
+	const batchKey = host?.batchKey;
+	if (first === undefined || batchKey === undefined) return pending;
+	const key = batchKey(first);
+	return pending.filter((event) => batchKey(event) === key);
+}
+
 async function uploadPendingOnce(
 	config: CollectorConfig,
 	paths: CollectorPaths,
@@ -673,12 +685,14 @@ async function uploadPendingOnce(
 	onAcknowledged?: () => void,
 	policy?: VaultCapturePolicy,
 	first?: ReadonlySet<string>,
+	host?: HostCapturePolicy,
 ): Promise<Readonly<{ uploaded: number; retryAfterMs: number | null }>> {
 	let uploaded = 0;
 	for (let attempt = 0; attempt < MAX_UPLOADS_PER_TICK; attempt += 1) {
 		signal?.throwIfAborted();
 		await recheckQueuedAccounts(config, paths, policy);
-		const batch = await nextBatch(paths, MAX_UPLOAD_BYTES, first);
+		const pending = await nextBatch(paths, MAX_UPLOAD_BYTES, first);
+		const batch = captureBatch(pending, host);
 		if (batch.length === 0) return { uploaded, retryAfterMs: null };
 		const body = JSON.stringify({ events: batch });
 		if (Buffer.byteLength(body, "utf8") > MAX_REQUEST_BYTES) {
@@ -859,6 +873,7 @@ export async function collectorTick(
 		onAcknowledged,
 		policy,
 		first,
+		host,
 	);
 	const scan =
 		(await outboxSize(paths)) >= SCAN_PAUSE_OUTBOX_BYTES
@@ -886,6 +901,7 @@ export async function collectorTick(
 			onAcknowledged,
 			policy,
 			first,
+			host,
 		);
 		upload = { ...next, uploaded: upload.uploaded + next.uploaded };
 	}

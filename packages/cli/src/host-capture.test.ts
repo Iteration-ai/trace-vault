@@ -156,3 +156,88 @@ test("native locations require current evidence and resolve symlinks before host
 		null,
 	);
 });
+
+test("host batches acknowledge one destination before honoring accepted-response backpressure", async (context) => {
+	const root = await fs.realpath(
+		await fs.mkdtemp(path.join(os.tmpdir(), "host-batches-")),
+	);
+	context.after(() => fs.rm(root, { recursive: true, force: true }));
+	const home = path.join(root, "claude");
+	const directory = path.join(root, "collector");
+	const filename = path.join(
+		home,
+		"projects",
+		"p",
+		"11111111-2222-4333-8444-555555555555.jsonl",
+	);
+	await fs.mkdir(path.dirname(filename), { recursive: true });
+	await fs.writeFile(
+		filename,
+		["first", "second"]
+			.map((name) =>
+				JSON.stringify({
+					type: "user",
+					sessionId: "11111111-2222-4333-8444-555555555555",
+					uuid: name,
+					cwd: path.join(root, name),
+					message: { role: "user", content: name },
+				}),
+			)
+			.join("\n") + "\n",
+	);
+	const paths = collectorPaths(directory);
+	await saveState(await prepareSourceInitialState("claude", home, true), paths);
+	const config: CollectorConfig = {
+		source: "claude",
+		claudeHome: home,
+		dataDirectory: directory,
+		endpoint: "https://host.example/traces",
+		token: "fixture",
+		destination: "host",
+	};
+	const capture: HostCapturePolicy = {
+		revision: 1,
+		authorizeRecord: (source, line, file, cwds) => {
+			const location = captureRecordLocation(source, line, file, cwds);
+			return location
+				? { revision: 1, basis: "location", reference: location }
+				: null;
+		},
+		authorizeEvent: (event) => event,
+		batchKey: (event) => event.capture!.reference,
+	};
+	const destinations = new Set<string>();
+	const request = async (
+		_input: string | URL | Request,
+		init?: RequestInit,
+	) => {
+		const { events } = JSON.parse(String(init?.body)) as {
+			events: TraceEvent[];
+		};
+		const keys = new Set(events.map((event) => event.capture!.reference));
+		assert.equal(keys.size, 1);
+		for (const key of keys) destinations.add(key);
+		return Response.json(
+			{
+				deviceId: "11111111-2222-4333-8444-555555555555",
+				acceptedEventIds: events.map((event) => event.eventId),
+			},
+			{ status: 202, headers: { "Retry-After": "5" } },
+		);
+	};
+	const first = await collectorTick(
+		config,
+		paths,
+		request,
+		undefined,
+		undefined,
+		{ capture },
+	);
+	assert.equal(first.retryAfterMs, 5000);
+	assert.ok((await nextBatch(paths, 1024 * 1024)).length > 0);
+	await collectorTick(config, paths, request, undefined, undefined, {
+		capture,
+	});
+	assert.equal(destinations.size, 2);
+	assert.deepEqual(await nextBatch(paths, 1024 * 1024), []);
+});
