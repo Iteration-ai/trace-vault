@@ -30,6 +30,7 @@ export {
 } from "./claude-transcript.js";
 export {
 	collectorTick,
+	type HostCapturePolicy,
 	type HistoryProgress,
 	type RecentMessagesProgress,
 	scanSourceOnce,
@@ -113,6 +114,7 @@ export {
 } from "./vault-enrollment.js";
 export {
 	authorizeVaultRecord,
+	captureRecordLocation,
 	reauthorizeVaultEvent,
 	resolveCaptureLocation,
 	scopeVaultEvents,

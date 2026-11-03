@@ -6,6 +6,7 @@ import {
 	type CollectorSource,
 	type TraceEvent,
 	type VaultCapturePolicy,
+	type VaultCaptureAuthorization,
 } from "iteration-trace-contracts";
 import { type CollectorFetcher, collectorFetch } from "./collector-fetch.js";
 import { fetchVaultPolicy } from "./vault-api.js";
@@ -67,6 +68,17 @@ const UPLOAD_TIMEOUT_MS = 90_000;
 // pauses well below the outbox capacity and resumes once uploads drain it.
 const SCAN_PAUSE_OUTBOX_BYTES = 32 * 1024 * 1024;
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
+
+export type HostCapturePolicy = Readonly<{
+	revision: number;
+	authorizeRecord: (
+		source: CollectorSource,
+		line: string,
+		filename: string,
+		cwds: Record<string, string>,
+	) => VaultCaptureAuthorization | null;
+	authorizeEvent: (event: TraceEvent) => TraceEvent | null;
+}>;
 
 export type HistoryProgress = Readonly<{
 	sessions: number;
@@ -181,6 +193,7 @@ export async function scanSourceOnce(
 	signal?: AbortSignal,
 	policy?: VaultCapturePolicy,
 	accounts?: ClaudeAccountIndex | null,
+	host?: HostCapturePolicy,
 ): Promise<
 	Readonly<{
 		discovered: number;
@@ -190,10 +203,17 @@ export async function scanSourceOnce(
 	}>
 > {
 	signal?.throwIfAborted();
+	if (config.destination === "host" && host === undefined)
+		throw new Error("Host collection requires a current capture policy.");
 	const source = collectorSource(config);
 	const sourceDirectory = path.resolve(collectorSourceDirectory(config));
 	const state = await loadState(paths);
 	const captureState = await scanCaptureState(config, state, policy, accounts);
+	if (host !== undefined)
+		captureState.checkpoint = {
+			captureCwds: captureState.cwds,
+			captureRevision: host.revision,
+		};
 	if (!state.initialized || state.sourceDirectory !== sourceDirectory) {
 		throw new Error(
 			`Collector state does not match the ${source} directory; reconnect this source.`,
@@ -332,16 +352,18 @@ export async function scanSourceOnce(
 					continue;
 				}
 				const capture =
-					policy === undefined
-						? undefined
-						: authorizeVaultRecord(
-								policy,
-								source,
-								line,
-								filename,
-								captureCwds,
-								captureState.accounts,
-							);
+					host !== undefined
+						? host.authorizeRecord(source, line, filename, captureCwds)
+						: policy === undefined
+							? undefined
+							: authorizeVaultRecord(
+									policy,
+									source,
+									line,
+									filename,
+									captureCwds,
+									captureState.accounts,
+								);
 				if (capture === null) {
 					excludedRecords += 1;
 					lineStart = index + 1;
@@ -449,6 +471,8 @@ async function messagesInRecords(
 	start: number,
 	room: number,
 	queuedIds: ReadonlySet<string>,
+	host: HostCapturePolicy | undefined,
+	cwds: Record<string, string>,
 ): Promise<Readonly<{ events: readonly TraceEvent[]; consumed: number }>> {
 	const events: TraceEvent[] = [];
 	let lineStart = 0;
@@ -472,7 +496,9 @@ async function messagesInRecords(
 			filename,
 			byteOffset,
 		);
-		for (const record of parsed) {
+		const capture = host?.authorizeRecord(source, line, filename, cwds);
+		if (capture === null) continue;
+		for (const record of scopeVaultEvents(parsed, capture, line)) {
 			if (record.eventType !== "user_message" || queuedIds.has(record.eventId))
 				continue;
 			const event = await redactTraceEvent(record);
@@ -492,6 +518,7 @@ async function queueRecentMessages(
 	paths: CollectorPaths,
 	limit: number | undefined,
 	signal?: AbortSignal,
+	host?: HostCapturePolicy,
 ): Promise<ReadonlySet<string> | undefined> {
 	if (limit === undefined) return undefined;
 	const recent = (await loadRecentMessages(paths)) ?? {
@@ -499,10 +526,12 @@ async function queueRecentMessages(
 		cursors: {},
 		queued: [...(await queuedUserMessageIds(paths, limit))],
 		sent: 0,
+		captureCwds: {},
 		scanned: false,
 	};
 	if (recent.scanned) return new Set(recent.queued);
 	const source = collectorSource(config);
+	const captureCwds = { ...recent.captureCwds };
 	const mainCursors = (await loadState(paths)).cursors;
 	const files = await sourceFilesNewestFirst(
 		source,
@@ -532,6 +561,8 @@ async function queueRecentMessages(
 			start,
 			room,
 			queuedIds,
+			host,
+			captureCwds,
 		);
 		for (const event of found.events) {
 			events.push(event);
@@ -551,6 +582,7 @@ async function queueRecentMessages(
 	await saveRecentMessages(
 		{
 			version: 1,
+			...(host === undefined ? {} : { captureCwds }),
 			cursors,
 			queued,
 			sent: recent.sent,
@@ -729,7 +761,10 @@ export async function collectorTick(
 	fetcher: CollectorFetcher = collectorFetch,
 	signal?: AbortSignal,
 	onAcknowledged?: () => void,
-	options: Readonly<{ recentMessages?: number }> = {},
+	options: Readonly<{
+		recentMessages?: number;
+		capture?: HostCapturePolicy;
+	}> = {},
 ): Promise<
 	Readonly<{
 		discovered: number;
@@ -743,6 +778,28 @@ export async function collectorTick(
 	}>
 > {
 	const recentLimit = checkedRecentLimit(config, options.recentMessages);
+	const host = options.capture;
+	if (config.destination === "host" && host === undefined)
+		throw new Error("Host collection requires a current capture policy.");
+	if (host !== undefined) {
+		if (!Number.isSafeInteger(host.revision) || host.revision <= 0)
+			throw new Error("Capture revisions must be positive safe integers.");
+		await rewritePendingEvents(paths, host.authorizeEvent);
+		const state = await loadState(paths);
+		if (state.captureRevision !== host.revision) {
+			await saveState(
+				{
+					...state,
+					cursors: {},
+					skipping: [],
+					captureCwds: {},
+					captureRevision: host.revision,
+				},
+				paths,
+			);
+			await fs.rm(paths.recentMessages, { force: true });
+		}
+	}
 	const accounts = await vaultAccountIndex(config);
 	const policy =
 		config.destination === "vault"
@@ -776,7 +833,13 @@ export async function collectorTick(
 		}
 	}
 	await redactPendingOutbox(paths);
-	const first = await queueRecentMessages(config, paths, recentLimit, signal);
+	const first = await queueRecentMessages(
+		config,
+		paths,
+		recentLimit,
+		signal,
+		host,
+	);
 	let upload = await uploadPendingOnce(
 		config,
 		paths,
@@ -794,7 +857,7 @@ export async function collectorTick(
 					caughtUp: false,
 					history: await savedHistoryProgress(config, paths),
 				}
-			: await scanSourceOnce(config, paths, signal, policy, accounts);
+			: await scanSourceOnce(config, paths, signal, policy, accounts, host);
 	if (policy !== undefined && scan.caughtUp) {
 		const state = await loadState(paths);
 		if (state.captureRecheckAt === undefined)

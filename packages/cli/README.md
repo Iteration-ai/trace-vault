@@ -53,6 +53,21 @@ and restarting. Do not delete collector state or queued events to recover a lock
 
 ## API responsibilities
 
+A hosted consumer can set `destination: "host"` and pass a `HostCapturePolicy`
+as `collectorTick`'s `capture` option. Without it, scanning and uploading fail
+closed. The callback authorizes native records before normalization, redaction,
+or durable queuing, including the recent-message pass. `captureRecordLocation`
+extracts current native working-directory evidence and resolves symlinks; it
+does not infer a workspace from a transcript directory name. Records without
+reliable location evidence can be excluded by the host.
+
+The host owns destination selection and its authenticated fetcher. Positive safe
+integer revisions bind queued events to the reviewed permission set. Changing a
+revision reauthorizes pending events and restarts bounded native history scans.
+Older binaries reject the host destination in config rather than uploading its
+queue as an unscoped connection. Callers must stop older services before saving
+that config. Native agent session files remain the history source.
+
 - `collectorTick`, `scanSourceOnce`, `TraceUploadError`: bounded native scans,
   redaction, retryable durable outbox upload and acknowledgement. Accept an
   optional `CollectorFetcher` and cancellation signal at the transport boundary.

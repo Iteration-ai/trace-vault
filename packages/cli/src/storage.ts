@@ -19,7 +19,7 @@ type CollectorConnection = Readonly<{
 	dataDirectory: string;
 	organizationId?: string;
 	organizationName?: string;
-	destination?: "vault";
+	destination?: "vault" | "host";
 }>;
 
 export type CollectorConfig =
@@ -88,7 +88,7 @@ const connectionSchema = {
 	dataDirectory: z.string(),
 	organizationId: z.uuid().optional(),
 	organizationName: z.string().min(1).max(160).optional(),
-	destination: z.literal("vault").optional(),
+	destination: z.enum(["vault", "host"]).optional(),
 };
 const configSchema = z.union([
 	z.object({ ...connectionSchema, codexHome: z.string() }).strict(),
@@ -609,6 +609,7 @@ export async function nextBatch(
 const recentMessagesSchema = z
 	.object({
 		version: z.literal(1),
+		captureCwds: z.record(z.string(), z.string()).optional(),
 		cursors: z.record(
 			z.string(),
 			z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
