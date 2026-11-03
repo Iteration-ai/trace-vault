@@ -116,6 +116,28 @@ function recordScope(
 	};
 }
 
+export function captureRecordLocation(
+	source: CollectorSource,
+	line: string,
+	filename: string,
+	cwds: Record<string, string>,
+): string | null {
+	let decoded: unknown;
+	try {
+		decoded = JSON.parse(line);
+	} catch {
+		delete cwds[filename];
+		return null;
+	}
+	const parsed = scopeRecordSchema.safeParse(decoded);
+	if (!parsed.success) {
+		delete cwds[filename];
+		return null;
+	}
+	const cwd = recordScope(source, parsed.data, filename, cwds).cwd;
+	return cwd && path.isAbsolute(cwd) ? resolveCaptureLocation(cwd) : null;
+}
+
 export function authorizeVaultRecord(
 	policy: VaultCapturePolicy,
 	source: CollectorSource,

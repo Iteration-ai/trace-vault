@@ -53,6 +53,26 @@ and restarting. Do not delete collector state or queued events to recover a lock
 
 ## API responsibilities
 
+A hosted consumer can set `destination: "host"` and pass a `HostCapturePolicy`
+as `collectorTick`'s `capture` option. Without it, scanning and uploading fail
+closed. The callback authorizes native records before normalization, redaction,
+or durable queuing, including the recent-message pass. `captureRecordLocation`
+extracts current native working-directory evidence and resolves symlinks; it
+does not infer a workspace from a transcript directory name. Records without
+reliable location evidence can be excluded by the host.
+
+The host owns destination selection and its authenticated fetcher. Positive safe
+integer revisions bind queued events to the reviewed permission set. Changing a
+revision reauthorizes pending events and restarts bounded native history scans.
+Older binaries reject the host destination in config rather than uploading its
+queue as an unscoped connection. Callers must stop older services before saving
+that config. Native agent session files remain the history source.
+
+For more than one destination, supply `batchKey` on the host policy. Each
+upload then contains one key, so an accepted batch can be acknowledged before
+another destination is retried. The host fetcher must preserve `Retry-After`
+on accepted responses as well as rejected ones.
+
 - `collectorTick`, `scanSourceOnce`, `TraceUploadError`: bounded native scans,
   redaction, retryable durable outbox upload and acknowledgement. Accept an
   optional `CollectorFetcher` and cancellation signal at the transport boundary.
@@ -65,8 +85,11 @@ and restarting. Do not delete collector state or queued events to recover a lock
   metadata and file formats remain readable for deployed collectors/rollback.
 - `sourceHome`, Claude/Codex/Cursor parsers, Git helpers, redaction and hook-queue
   readers: native collection without product enrollment or hook installation.
-- `acquireCollectorLock`, `waitForCollectorLock`, `ensurePrivateDirectory` and
+- `acquireCollectorLock`, `tryAcquireCollectorLock`, `waitForCollectorLock`, `ensurePrivateDirectory` and
   Windows PowerShell helpers: shared single-writer and private-storage machinery.
+  `tryAcquireCollectorLock` returns `null` while another owner holds the lock;
+  filesystem and storage failures still reject. Passive workers can retry and
+  take ownership after the current worker exits without parsing error messages.
 - Vault policy authorization, enrollment, account evidence and metadata-only
   Claude receiver/setup functions: self-hosted native capture, independent of
   any Iteration account. Unsupported identity evidence fails closed.

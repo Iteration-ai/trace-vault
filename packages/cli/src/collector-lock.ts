@@ -22,6 +22,17 @@ async function lockIdentity(filename: string): Promise<string | null> {
 
 class CollectorLockBusyError extends Error {}
 
+export async function tryAcquireCollectorLock(
+	paths: CollectorPaths,
+): Promise<(() => Promise<void>) | null> {
+	try {
+		return await acquireCollectorLock(paths);
+	} catch (error) {
+		if (error instanceof CollectorLockBusyError) return null;
+		throw error;
+	}
+}
+
 export async function acquireCollectorLock(
 	paths: CollectorPaths,
 ): Promise<() => Promise<void>> {
