@@ -166,11 +166,15 @@ async function scanCaptureState(
 	state: CollectorState,
 	policy: VaultCapturePolicy | undefined,
 	accounts: ClaudeAccountIndex | null | undefined,
+	host?: HostCapturePolicy,
 ) {
 	if (config.destination === "vault" && policy === undefined)
 		throw new Error(
 			"Company vault scanning requires a current capture policy.",
 		);
+	if (config.destination === "host" && host === undefined)
+		throw new Error("Host collection requires a current capture policy.");
+	const revision = host?.revision ?? policy?.revision;
 	const cwds: Record<string, string> = { ...state.captureCwds };
 	const accountIndex =
 		accounts === undefined ? await vaultAccountIndex(config) : accounts;
@@ -181,9 +185,9 @@ async function scanCaptureState(
 			await accountIndex?.persistNativeTools(config.dataDirectory);
 		},
 		checkpoint:
-			policy === undefined
+			revision === undefined
 				? {}
-				: { captureCwds: cwds, captureRevision: policy.revision },
+				: { captureCwds: cwds, captureRevision: revision },
 	};
 }
 
@@ -203,17 +207,16 @@ export async function scanSourceOnce(
 	}>
 > {
 	signal?.throwIfAborted();
-	if (config.destination === "host" && host === undefined)
-		throw new Error("Host collection requires a current capture policy.");
 	const source = collectorSource(config);
 	const sourceDirectory = path.resolve(collectorSourceDirectory(config));
 	const state = await loadState(paths);
-	const captureState = await scanCaptureState(config, state, policy, accounts);
-	if (host !== undefined)
-		captureState.checkpoint = {
-			captureCwds: captureState.cwds,
-			captureRevision: host.revision,
-		};
+	const captureState = await scanCaptureState(
+		config,
+		state,
+		policy,
+		accounts,
+		host,
+	);
 	if (!state.initialized || state.sourceDirectory !== sourceDirectory) {
 		throw new Error(
 			`Collector state does not match the ${source} directory; reconnect this source.`,
@@ -755,6 +758,34 @@ async function recheckQueuedAccounts(
 
 // With `recentMessages`, the person's newest messages, up to that many, are
 // sent ahead of the rest of their history.
+async function prepareHostCapture(
+	config: CollectorConfig,
+	paths: CollectorPaths,
+	host: HostCapturePolicy | undefined,
+): Promise<void> {
+	if (config.destination === "host" && host === undefined)
+		throw new Error("Host collection requires a current capture policy.");
+	if (host !== undefined) {
+		if (!Number.isSafeInteger(host.revision) || host.revision <= 0)
+			throw new Error("Capture revisions must be positive safe integers.");
+		await rewritePendingEvents(paths, host.authorizeEvent);
+		const state = await loadState(paths);
+		if (state.captureRevision !== host.revision) {
+			await saveState(
+				{
+					...state,
+					cursors: {},
+					skipping: [],
+					captureCwds: {},
+					captureRevision: host.revision,
+				},
+				paths,
+			);
+			await fs.rm(paths.recentMessages, { force: true });
+		}
+	}
+}
+
 export async function collectorTick(
 	config: CollectorConfig,
 	paths: CollectorPaths,
@@ -779,27 +810,7 @@ export async function collectorTick(
 > {
 	const recentLimit = checkedRecentLimit(config, options.recentMessages);
 	const host = options.capture;
-	if (config.destination === "host" && host === undefined)
-		throw new Error("Host collection requires a current capture policy.");
-	if (host !== undefined) {
-		if (!Number.isSafeInteger(host.revision) || host.revision <= 0)
-			throw new Error("Capture revisions must be positive safe integers.");
-		await rewritePendingEvents(paths, host.authorizeEvent);
-		const state = await loadState(paths);
-		if (state.captureRevision !== host.revision) {
-			await saveState(
-				{
-					...state,
-					cursors: {},
-					skipping: [],
-					captureCwds: {},
-					captureRevision: host.revision,
-				},
-				paths,
-			);
-			await fs.rm(paths.recentMessages, { force: true });
-		}
-	}
+	await prepareHostCapture(config, paths, host);
 	const accounts = await vaultAccountIndex(config);
 	const policy =
 		config.destination === "vault"
