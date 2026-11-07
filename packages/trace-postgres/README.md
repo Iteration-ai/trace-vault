@@ -30,6 +30,18 @@ qualified host relations/functions and a fixed `pg_catalog` search path.
 Host migrations must precede this installer; semantic projection changes need
 a new canonical SQL version and an explicit host data backfill.
 
+SQL `0003` stores the payload fields other rows read as columns on every write:
+`turn_id`, `payload_thread_id`, `record_cwd`, `record_git_branch`,
+`tool_result_agent_id`, `tool_result_description`, `meta_title`, `meta_cwd`,
+`meta_repository_url` and `message_preview`, through
+`trace_payload_fields(payload, event_type)`. Each holds the raw value its
+readers extract; readers keep their own trimming and limits. After installing
+it, call `backfillTracePayloadFields(dedicatedPgClient, "vault")` outside a
+transaction to fill rows written before it. It rewrites rows in primary-key
+batches that each commit with their position in `__trace_engine_backfills`, so
+an interrupted run resumes, and it leaves stored payloads in place. Hosts with
+their own resumable backfill runner can rewrite `payload` to itself instead.
+
 ### Release and upgrade compatibility
 
 The published Vault `v0.1.0` contains only Vault migrations `0000` through `0002`,

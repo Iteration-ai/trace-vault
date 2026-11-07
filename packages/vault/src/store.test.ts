@@ -6,6 +6,7 @@ import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { TraceEvent } from "iteration-trace-contracts";
+import { backfillTracePayloadFields } from "iteration-trace-postgres/migrate";
 import { Pool } from "pg";
 import { migrateVault } from "./migrate.js";
 import { VaultStore } from "./store.js";
@@ -331,6 +332,95 @@ test("vault ingestion preserves full payload, deduplicates across enrollments, a
 		store.readEvents(deviceCaller, null),
 		errorCode("forbidden"),
 	);
+});
+
+test("payload fields other rows read are stored as columns on write and backfilled for older rows", {
+	skip: !databaseUrl,
+}, async (context) => {
+	const { store, pool, deviceCaller, policy } = await fixture(context);
+	const base = event("meta", policy.revision);
+	const typed = (
+		eventId: string,
+		sequence: number,
+		eventType: TraceEvent["eventType"],
+		payload: TraceEvent["payload"],
+	): TraceEvent => ({ ...base, eventId, sequence, eventType, payload });
+	await store.ingest(deviceCaller, policy.revision, [
+		base,
+		typed("turn", 1, "turn_context", { turn_id: "turn-1", model: "m" }),
+		typed("prompt", 2, "user_message", { text: "  Fix   the build  " }),
+		typed("record", 3, "source_record", {
+			thread_id: "thread-1",
+			record: {
+				cwd: "/synthetic/repository",
+				gitBranch: "main",
+				toolUseResult: { agentId: "agent-1", description: "Review" },
+			},
+		}),
+	]);
+	const columns = `event_id, turn_id, payload_thread_id, record_cwd, record_git_branch,
+		tool_result_agent_id, tool_result_description, meta_title, meta_cwd,
+		meta_repository_url, message_preview`;
+	const read = async () =>
+		(
+			await pool.query(
+				`SELECT ${columns} FROM vault_traces.trace_events ORDER BY sequence`,
+			)
+		).rows;
+	const written = await read();
+	assert.deepEqual(
+		written.map((row) => [
+			row.event_id,
+			row.turn_id,
+			row.payload_thread_id,
+			row.record_cwd,
+			row.record_git_branch,
+			row.tool_result_agent_id,
+			row.tool_result_description,
+			row.meta_title,
+			row.meta_cwd,
+			row.meta_repository_url,
+			row.message_preview,
+		]),
+		[
+			["meta", null, null, null, null, null, null, "Source title", "/synthetic/repository", "git@github.com:synthetic/company.git", null],
+			["turn", "turn-1", null, null, null, null, null, null, null, null, null],
+			["prompt", null, null, null, null, null, null, null, null, null, "Fix the build"],
+			["record", null, "thread-1", "/synthetic/repository", "main", "agent-1", "Review", null, null, null, null],
+		],
+	);
+	const payloadBytes = async () =>
+		(
+			await pool.query(
+				"SELECT pg_relation_size(reltoastrelid)::bigint AS size FROM pg_class WHERE oid = 'vault_traces.trace_events'::regclass",
+			)
+		).rows[0].size;
+	const storedBefore = await payloadBytes();
+	await pool.query(
+		"ALTER TABLE vault_traces.trace_events DISABLE TRIGGER trace_events_project_payload_fields",
+	);
+	await pool.query(`UPDATE vault_traces.trace_events SET turn_id = NULL,
+		payload_thread_id = NULL, record_cwd = NULL, record_git_branch = NULL,
+		tool_result_agent_id = NULL, tool_result_description = NULL, meta_title = NULL,
+		meta_cwd = NULL, meta_repository_url = NULL, message_preview = NULL`);
+	await pool.query(
+		"ALTER TABLE vault_traces.trace_events ENABLE TRIGGER trace_events_project_payload_fields",
+	);
+	await pool.query(
+		"UPDATE vault_traces.__trace_engine_backfills SET device_id = NULL, event_id = NULL, completed_at = NULL",
+	);
+	const client = await pool.connect();
+	try {
+		await backfillTracePayloadFields(client, "vault_traces", 3);
+	} finally {
+		client.release();
+	}
+	assert.deepEqual(await read(), written);
+	assert.equal(await payloadBytes(), storedBefore);
+	const progress = await pool.query(
+		"SELECT completed_at FROM vault_traces.__trace_engine_backfills WHERE name = '0003_payload_fields'",
+	);
+	assert.ok(progress.rows[0]?.completed_at);
 });
 
 test("session titles fall back to the first nonempty user message, never assistant text or internal IDs", {

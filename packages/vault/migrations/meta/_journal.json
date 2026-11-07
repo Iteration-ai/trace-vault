@@ -29,6 +29,13 @@
       "when": 1793403257034,
       "tag": "0003_canonical_trace_engine",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794082332068,
+      "tag": "0004_payload_fields",
+      "breakpoints": true
     }
   ]
 }

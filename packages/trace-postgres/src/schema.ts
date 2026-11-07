@@ -75,6 +75,17 @@ export function traceEventColumns() {
 		launchBranch: text("launch_branch"),
 		launchRepositoryUrl: text("launch_repository_url"),
 		launchCommitHash: text("launch_commit_hash"),
+		// Payload fields other rows read, projected on write (SQL 0003).
+		turnId: text("turn_id"),
+		payloadThreadId: text("payload_thread_id"),
+		recordCwd: text("record_cwd"),
+		recordGitBranch: text("record_git_branch"),
+		toolResultAgentId: text("tool_result_agent_id"),
+		toolResultDescription: text("tool_result_description"),
+		metaTitle: text("meta_title"),
+		metaCwd: text("meta_cwd"),
+		metaRepositoryUrl: text("meta_repository_url"),
+		messagePreview: text("message_preview"),
 		ingestedAt: timestamptz("ingested_at").notNull().defaultNow(),
 	};
 }

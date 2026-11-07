@@ -6,3 +6,9 @@ export function installTraceProjections(
 	client: TraceMigrationClient,
 	schema: string,
 ): Promise<void>;
+/** Resumable; uses the supplied dedicated connection outside a transaction. */
+export function backfillTracePayloadFields(
+	client: TraceMigrationClient,
+	schema: string,
+	batchSize?: number,
+): Promise<void>;
