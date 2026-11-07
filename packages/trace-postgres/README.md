@@ -42,6 +42,20 @@ batches that each commit with their position in `__trace_engine_backfills`, so
 an interrupted run resumes, and it leaves stored payloads in place. Hosts with
 their own resumable backfill runner can rewrite `payload` to itself instead.
 
+SQL `0004` switches every reader of another row's payload to those columns, so
+it requires them filled first. It also lets a host keep payloads outside
+PostgreSQL. `packTracePayloads(context, batch)` returns one object per session,
+each event a separate gzip member, with deterministic keys so a retried batch
+rewrites the same objects, and each event's `{object, offset, length}`. Store
+the objects, then pass the locations as `ingestTraceBatch`'s last argument. The
+row is projected from the payload, then stored with its location and a null
+`payload`. Usage reports stay in PostgreSQL: they are small, and a later report
+replaces the stored one in place. `readTracePayload(bytes)` reads one event's
+member, fetched by byte range, and `readTracePayloadObject(bytes)` a whole
+session object. `deleteTraceSession` returns the deleted events' objects in
+`payloadObjects`; remove them after the transaction commits. Hosts that pass no
+locations keep every payload in PostgreSQL, as Vault does.
+
 ### Release and upgrade compatibility
 
 The published Vault `v0.1.0` contains only Vault migrations `0000` through `0002`,

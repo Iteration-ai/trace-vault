@@ -41,4 +41,7 @@ export type TraceIngestExtension<TTransaction extends TraceTransaction> = (
 
 export type TraceDeleteResult = Readonly<{
 	status: "not_found" | "deleted" | "already_deleted";
+	// Host objects that held the deleted events' payloads; the host removes
+	// them once its transaction commits.
+	payloadObjects: readonly string[];
 }>;

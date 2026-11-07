@@ -42,9 +42,8 @@ export function traceEventColumns() {
 			mode: "string",
 		}),
 		eventType: text("event_type").notNull(),
-		payload: jsonb("payload")
-			.$type<Readonly<Record<string, JsonValue>>>()
-			.notNull(),
+		// Null once a host stores the payload at payloadObject (SQL 0004).
+		payload: jsonb("payload").$type<Readonly<Record<string, JsonValue>>>(),
 		run: jsonb("run").$type<TraceRunMarker>(),
 		displayText: text("display_text"),
 		isInstruction: boolean("is_instruction").notNull().default(false),
@@ -86,6 +85,10 @@ export function traceEventColumns() {
 		metaCwd: text("meta_cwd"),
 		metaRepositoryUrl: text("meta_repository_url"),
 		messagePreview: text("message_preview"),
+		// The host object holding the gzip member of this event's payload.
+		payloadObject: text("payload_object"),
+		payloadOffset: bigint("payload_offset", { mode: "number" }),
+		payloadLength: integer("payload_length"),
 		ingestedAt: timestamptz("ingested_at").notNull().defaultNow(),
 	};
 }
@@ -177,7 +180,15 @@ export function traceEventConstraints(
 		),
 		check(
 			"trace_events_payload_object",
-			sql`jsonb_typeof(${table.payload}) = 'object'`,
+			sql`${table.payload} IS NULL OR jsonb_typeof(${table.payload}) = 'object'`,
+		),
+		check(
+			"trace_events_payload_stored",
+			sql`${table.payload} IS NOT NULL OR (${table.payloadObject} IS NOT NULL AND ${table.payloadOffset} >= 0 AND ${table.payloadLength} > 0)`,
+		),
+		check(
+			"trace_events_payload_object_length",
+			sql`${table.payloadObject} IS NULL OR char_length(${table.payloadObject}) BETWEEN 1 AND 1024`,
 		),
 		check(
 			"trace_events_type",
@@ -255,23 +266,13 @@ export function traceEventConstraints(
 			.on(table.organizationId, table.deviceId, table.sessionId, table.usageAt)
 			.where(sql`${table.usageAt} IS NOT NULL`),
 		index("trace_events_turn_context")
-			.on(
-				table.organizationId,
-				table.deviceId,
-				table.sessionId,
-				sql`(${table.payload}->>'turn_id')`,
-			)
+			.on(table.organizationId, table.deviceId, table.sessionId, table.turnId)
 			.where(sql`${table.eventType} = 'turn_context'`),
 		index("trace_events_usage_order")
 			.on(table.organizationId, table.deviceId, table.sessionId, table.sequence)
 			.where(sql`${table.usageAt} IS NOT NULL`),
 		index("trace_events_usage_without_model")
-			.on(
-				table.organizationId,
-				table.deviceId,
-				table.sessionId,
-				sql`(${table.payload}->>'turn_id')`,
-			)
+			.on(table.organizationId, table.deviceId, table.sessionId, table.turnId)
 			.where(sql`${table.usageAt} IS NOT NULL AND ${table.model} IS NULL`),
 		index("trace_events_pull_request")
 			.on(table.organizationId, table.deviceId, table.sessionId)
@@ -281,10 +282,10 @@ export function traceEventConstraints(
 				table.organizationId,
 				table.deviceId,
 				table.sessionId,
-				sql`(${table.payload}#>>'{record,toolUseResult,agentId}')`,
+				table.toolResultAgentId,
 			)
 			.where(
-				sql`${table.eventType} = 'tool_result' AND (${table.payload}#>>'{record,toolUseResult,agentId}') IS NOT NULL`,
+				sql`${table.eventType} = 'tool_result' AND ${table.toolResultAgentId} IS NOT NULL`,
 			),
 	];
 }
