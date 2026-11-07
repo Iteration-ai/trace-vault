@@ -57,6 +57,17 @@ export async function ingestTraceBatch<TTransaction extends TraceTransaction>(
 			payload_length: location?.length ?? null,
 		};
 	});
+	// Hosts that keep payloads inline write no location columns.
+	const located = payloadLocations !== undefined;
+	const locationColumns = located
+		? sql`, payload_object, payload_offset, payload_length`
+		: sql``;
+	const locationValues = located
+		? sql`, e.payload_object, e.payload_offset, e.payload_length`
+		: sql``;
+	const locationTypes = located
+		? sql`, payload_object text, payload_offset bigint, payload_length integer`
+		: sql``;
 	const sessionLockKeys = sessionIds.map(
 		(id) => `${context.organizationId}:${context.userId}:${id}`,
 	);
@@ -67,16 +78,13 @@ export async function ingestTraceBatch<TTransaction extends TraceTransaction>(
 	const changed = await transaction.execute(sql`
 		INSERT INTO ${events} AS stored (
 			organization_id, project_id, device_id, user_id, event_id,
-			session_id, sequence, call_id, occurred_at, event_type, payload, run, ingested_at,
-			payload_object, payload_offset, payload_length
+			session_id, sequence, call_id, occurred_at, event_type, payload, run, ingested_at${locationColumns}
 		)
 		SELECT ${context.organizationId}::uuid, e.project_id, ${context.deviceId}::uuid, ${context.userId}::uuid,
-			e.event_id, e.session_id, e.sequence, e.call_id, e.occurred_at, e.event_type, e.payload, e.run, coalesce(e.ingested_at, now()),
-			e.payload_object, e.payload_offset, e.payload_length
+			e.event_id, e.session_id, e.sequence, e.call_id, e.occurred_at, e.event_type, e.payload, e.run, coalesce(e.ingested_at, now())${locationValues}
 		FROM jsonb_to_recordset(${JSON.stringify(receivedRows)}::jsonb) AS e(
 			event_id text, session_id text, sequence bigint, call_id text,
-			project_id uuid, occurred_at timestamptz, event_type text, payload jsonb, run jsonb, ingested_at timestamptz,
-			payload_object text, payload_offset bigint, payload_length integer
+			project_id uuid, occurred_at timestamptz, event_type text, payload jsonb, run jsonb, ingested_at timestamptz${locationTypes}
 		)
 		WHERE NOT EXISTS (
 			SELECT 1 FROM ${deletions} AS deleted
