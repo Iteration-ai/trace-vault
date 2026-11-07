@@ -265,28 +265,32 @@ export function traceEventConstraints(
 		index("trace_events_usage_session")
 			.on(table.organizationId, table.deviceId, table.sessionId, table.usageAt)
 			.where(sql`${table.usageAt} IS NOT NULL`),
-		index("trace_events_turn_context")
-			.on(table.organizationId, table.deviceId, table.sessionId, table.turnId)
-			.where(sql`${table.eventType} = 'turn_context'`),
+		// Serves both the Codex model lookup by turn and the usage repair. Like
+		// the agent result index, it is built online: one column's IS NOT NULL.
+		withConcurrency(
+			index("trace_events_turn").on(
+				table.organizationId,
+				table.deviceId,
+				table.sessionId,
+				table.turnId,
+			),
+			options,
+		).where(sql`${table.turnId} IS NOT NULL`),
 		index("trace_events_usage_order")
 			.on(table.organizationId, table.deviceId, table.sessionId, table.sequence)
 			.where(sql`${table.usageAt} IS NOT NULL`),
-		index("trace_events_usage_without_model")
-			.on(table.organizationId, table.deviceId, table.sessionId, table.turnId)
-			.where(sql`${table.usageAt} IS NOT NULL AND ${table.model} IS NULL`),
 		index("trace_events_pull_request")
 			.on(table.organizationId, table.deviceId, table.sessionId)
 			.where(sql`${table.pullRequestUrl} IS NOT NULL`),
-		index("trace_events_claude_agent_result")
-			.on(
+		withConcurrency(
+			index("trace_events_agent_result").on(
 				table.organizationId,
 				table.deviceId,
 				table.sessionId,
 				table.toolResultAgentId,
-			)
-			.where(
-				sql`${table.eventType} = 'tool_result' AND ${table.toolResultAgentId} IS NOT NULL`,
 			),
+			options,
+		).where(sql`${table.toolResultAgentId} IS NOT NULL`),
 	];
 }
 

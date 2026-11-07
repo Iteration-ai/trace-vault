@@ -52,7 +52,10 @@ row is projected from the payload, then stored with its location and a null
 `payload`. Usage reports stay in PostgreSQL: they are small, and a later report
 replaces the stored one in place. `readTracePayload(bytes)` reads one event's
 member, fetched by byte range, and `readTracePayloadObject(bytes)` a whole
-session object. `deleteTraceSession` returns the deleted events' objects in
+session object. Lookups by `turn_id` and `tool_result_agent_id` use the
+`trace_events_turn` and `trace_events_agent_result` indexes, each a single
+`IS NOT NULL` partial index that hosts can build concurrently.
+`deleteTraceSession` returns the deleted events' objects in
 `payloadObjects`; remove them after the transaction commits. Hosts that pass no
 locations keep every payload in PostgreSQL, as Vault does.
 
