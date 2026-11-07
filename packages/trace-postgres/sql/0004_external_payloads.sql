@@ -1,6 +1,9 @@
 -- Readers use the columns SQL 0003 projects instead of other rows' payloads,
--- so a host can store payloads outside PostgreSQL. A row with a payload
--- location written on insert keeps its projections and no payload.
+-- so a host can store payloads outside PostgreSQL. A row written before SQL
+-- 0003 has no columns until a backfill or the move of its payload fills them,
+-- and is read from its payload meanwhile; a row whose payload moved always
+-- has them. A row with a payload location written on insert keeps its
+-- projections and no payload.
 
 CREATE OR REPLACE FUNCTION __TRACE_SCHEMA__.project_trace_event_before_write() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog AS $function$
 DECLARE
@@ -86,7 +89,7 @@ BEGIN
 				AND turn.device_id = NEW.device_id
 				AND turn.session_id = NEW.session_id
 				AND turn.event_type = 'turn_context'
-				AND turn.turn_id = NEW.payload->>'turn_id'
+				AND (turn.turn_id = NEW.payload->>'turn_id' OR turn.payload->>'turn_id' = NEW.payload->>'turn_id')
 				AND turn.model IS NOT NULL
 			LIMIT 1;
 		END IF;
@@ -177,11 +180,11 @@ $function$;
 CREATE OR REPLACE FUNCTION __TRACE_SCHEMA__.claude_agent_description(
     organization_id uuid, device_id uuid, parent_session_id text, agent_id text
 ) RETURNS text LANGUAGE sql STABLE SET search_path = pg_catalog AS $function$
-    SELECT nullif(left(regexp_replace(btrim(e.tool_result_description), '[[:space:]]+', ' ', 'g'), 200), '')
+    SELECT nullif(left(regexp_replace(btrim(coalesce(e.tool_result_description, e.payload#>>'{record,toolUseResult,description}')), '[[:space:]]+', ' ', 'g'), 200), '')
     FROM __TRACE_SCHEMA__.trace_events e
     WHERE e.organization_id = $1 AND e.device_id = $2 AND e.session_id = $3
         AND e.event_type = 'tool_result'
-        AND e.tool_result_agent_id = $4
+        AND (e.tool_result_agent_id = $4 OR e.payload#>>'{record,toolUseResult,agentId}' = $4)
     ORDER BY e.sequence, e.event_id LIMIT 1
 $function$;
 
@@ -227,12 +230,12 @@ CREATE OR REPLACE FUNCTION __TRACE_SCHEMA__.trace_session_read_projection(
         ORDER BY e.sequence, e.event_id LIMIT 1
     ) AS m ON true
     LEFT JOIN LATERAL (
-        SELECT nullif(left(btrim(e.record_cwd), 4096), '') AS cwd,
-            nullif(left(btrim(e.record_git_branch), 1024), '') AS branch
+        SELECT nullif(left(btrim(coalesce(e.record_cwd, e.payload#>>'{record,cwd}')), 4096), '') AS cwd,
+            nullif(left(btrim(coalesce(e.record_git_branch, e.payload#>>'{record,gitBranch}')), 1024), '') AS branch
         FROM __TRACE_SCHEMA__.trace_events e
         WHERE device.is_claude
             AND e.organization_id = $1 AND e.device_id = $2 AND e.session_id = $3
-            AND nullif(btrim(e.record_cwd), '') IS NOT NULL
+            AND nullif(btrim(coalesce(e.record_cwd, e.payload#>>'{record,cwd}')), '') IS NOT NULL
         ORDER BY e.sequence, e.event_id LIMIT 1
     ) AS claude_launch ON true
     LEFT JOIN LATERAL (
@@ -274,7 +277,7 @@ CREATE OR REPLACE FUNCTION __TRACE_SCHEMA__.trace_session_read_projection(
                 SELECT min(e.sequence) FROM __TRACE_SCHEMA__.trace_events e
                 WHERE e.organization_id = $1 AND e.device_id = $2 AND e.session_id = $3
                     AND e.is_run_start
-                    AND e.run IS NULL AND e.payload_thread_id = m.thread_id
+                    AND e.run IS NULL AND coalesce(e.payload_thread_id, e.payload->>'thread_id') = m.thread_id
             ) END AS sequence
     ) AS boundary ON true
     LEFT JOIN LATERAL (
@@ -357,12 +360,12 @@ BEGIN
         own_event_count = EXCLUDED.own_event_count;
     WITH launched AS (
         SELECT DISTINCT e.organization_id, e.user_id, e.device_id, e.session_id,
-            e.tool_result_agent_id AS agent_id
+            coalesce(e.tool_result_agent_id, e.payload#>>'{record,toolUseResult,agentId}') AS agent_id
         FROM inserted_events e
         JOIN __TRACE_SCHEMA__.collector_devices d ON d.organization_id = e.organization_id
             AND d.id = e.device_id AND d.source = 'claude'
         WHERE e.event_type = 'tool_result'
-            AND e.tool_result_agent_id IS NOT NULL
+            AND coalesce(e.tool_result_agent_id, e.payload#>>'{record,toolUseResult,agentId}') IS NOT NULL
     )
     UPDATE __TRACE_SCHEMA__.trace_sessions AS child
     SET agent_description = __TRACE_SCHEMA__.claude_agent_description(
@@ -402,29 +405,29 @@ CREATE OR REPLACE FUNCTION __TRACE_SCHEMA__.trace_session_presentation(
 ) RETURNS TABLE (source_title text, first_user_message_preview text, source_cwd text, source_repository_url text)
 LANGUAGE sql STABLE SET search_path = pg_catalog AS $function$
     SELECT
-        (SELECT __TRACE_SCHEMA__.trace_compact_text(e.meta_title)
+        (SELECT __TRACE_SCHEMA__.trace_compact_text(coalesce(e.meta_title, CASE WHEN jsonb_typeof(e.payload->'title') = 'string' THEN e.payload->>'title' END))
             FROM __TRACE_SCHEMA__.trace_events e
             WHERE e.organization_id = $1 AND e.device_id = $2 AND e.session_id = $3
-                AND e.event_type = 'session_meta' AND e.meta_title IS NOT NULL
-                AND __TRACE_SCHEMA__.trace_compact_text(e.meta_title) IS NOT NULL
+                AND e.event_type = 'session_meta' AND coalesce(e.meta_title, CASE WHEN jsonb_typeof(e.payload->'title') = 'string' THEN e.payload->>'title' END) IS NOT NULL
+                AND __TRACE_SCHEMA__.trace_compact_text(coalesce(e.meta_title, CASE WHEN jsonb_typeof(e.payload->'title') = 'string' THEN e.payload->>'title' END)) IS NOT NULL
             ORDER BY e.sequence DESC, e.event_id COLLATE "C" DESC LIMIT 1),
-        (SELECT e.message_preview
+        (SELECT coalesce(e.message_preview, __TRACE_SCHEMA__.trace_message_preview(e.payload))
             FROM __TRACE_SCHEMA__.trace_events e
             WHERE e.organization_id = $1 AND e.device_id = $2 AND e.session_id = $3
                 AND e.event_type = 'user_message'
-                AND e.message_preview IS NOT NULL
+                AND coalesce(e.message_preview, __TRACE_SCHEMA__.trace_message_preview(e.payload)) IS NOT NULL
             ORDER BY e.sequence, e.event_id COLLATE "C" LIMIT 1),
-        (SELECT btrim(e.meta_cwd)
+        (SELECT btrim(coalesce(e.meta_cwd, CASE WHEN jsonb_typeof(e.payload->'cwd') = 'string' THEN e.payload->>'cwd' END))
             FROM __TRACE_SCHEMA__.trace_events e
             WHERE e.organization_id = $1 AND e.device_id = $2 AND e.session_id = $3
-                AND e.event_type = 'session_meta' AND e.meta_cwd IS NOT NULL
-                AND __TRACE_SCHEMA__.trace_compact_text(e.meta_cwd) IS NOT NULL
+                AND e.event_type = 'session_meta' AND coalesce(e.meta_cwd, CASE WHEN jsonb_typeof(e.payload->'cwd') = 'string' THEN e.payload->>'cwd' END) IS NOT NULL
+                AND __TRACE_SCHEMA__.trace_compact_text(coalesce(e.meta_cwd, CASE WHEN jsonb_typeof(e.payload->'cwd') = 'string' THEN e.payload->>'cwd' END)) IS NOT NULL
             ORDER BY e.sequence DESC, e.event_id COLLATE "C" DESC LIMIT 1),
-        (SELECT btrim(e.meta_repository_url)
+        (SELECT btrim(coalesce(e.meta_repository_url, CASE WHEN jsonb_typeof(e.payload#>'{git,repository_url}') = 'string' THEN e.payload#>>'{git,repository_url}' END))
             FROM __TRACE_SCHEMA__.trace_events e
             WHERE e.organization_id = $1 AND e.device_id = $2 AND e.session_id = $3
-                AND e.event_type = 'session_meta' AND e.meta_repository_url IS NOT NULL
-                AND __TRACE_SCHEMA__.trace_compact_text(e.meta_repository_url) IS NOT NULL
+                AND e.event_type = 'session_meta' AND coalesce(e.meta_repository_url, CASE WHEN jsonb_typeof(e.payload#>'{git,repository_url}') = 'string' THEN e.payload#>>'{git,repository_url}' END) IS NOT NULL
+                AND __TRACE_SCHEMA__.trace_compact_text(coalesce(e.meta_repository_url, CASE WHEN jsonb_typeof(e.payload#>'{git,repository_url}') = 'string' THEN e.payload#>>'{git,repository_url}' END)) IS NOT NULL
             ORDER BY e.sequence DESC, e.event_id COLLATE "C" DESC LIMIT 1)
 $function$;
 
