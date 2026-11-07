@@ -42,11 +42,13 @@ batches that each commit with their position in `__trace_engine_backfills`, so
 an interrupted run resumes, and it leaves stored payloads in place. Hosts with
 their own resumable backfill runner can rewrite `payload` to itself instead.
 
-SQL `0004` switches every reader of another row's payload to those columns. A
-row written before SQL `0003` is read from its payload until a backfill or the
-move of its payload fills its columns, so hosts that keep pre-`0003` rows
-should keep payload-expression indexes for those lookups until then. It also lets a host keep payloads outside
-PostgreSQL. `packTracePayloads(context, batch)` returns one object per session,
+SQL `0004` switches every reader of another row's payload to those columns,
+reading a row written before SQL `0003` from its payload until its columns are
+filled. SQL `0005` reads only the columns: installing it first projects every
+row that still holds its payload and lacks them, so a host that never ran the
+backfill can rewrite its whole table here, and a host that moved payloads out
+of PostgreSQL must have projected each row as it moved it. SQL `0004` also lets
+a host keep payloads outside PostgreSQL. `packTracePayloads(context, batch)` returns one object per session,
 each event a separate gzip member, with deterministic keys so a retried batch
 rewrites the same objects, and each event's `{object, offset, length}`. Store
 the objects, then pass the locations as `ingestTraceBatch`'s last argument. The

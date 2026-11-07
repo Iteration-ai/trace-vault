@@ -13,7 +13,10 @@ import {
 	packTracePayloads,
 	readTracePayload,
 } from "iteration-trace-postgres";
-import { backfillTracePayloadFields } from "iteration-trace-postgres/migrate";
+import {
+	backfillTracePayloadFields,
+	installTraceProjections,
+} from "iteration-trace-postgres/migrate";
 import { Pool } from "pg";
 import { migrateVault } from "./migrate.js";
 import { VaultStore } from "./store.js";
@@ -466,7 +469,7 @@ test("payload fields other rows read are stored as columns on write and backfill
 	assert.ok(progress.rows[0]?.completed_at);
 });
 
-test("rows without payload-field columns are read from their payloads until filled", {
+test("installing SQL 0005 projects rows written before SQL 0003, whose readers use only the columns", {
 	skip: !databaseUrl,
 }, async (context) => {
 	const { store, pool, deviceCaller, policy } = await fixture(context);
@@ -496,6 +499,21 @@ test("rows without payload-field columns are read from their payloads until fill
 	await pool.query(
 		"UPDATE vault_traces.trace_sessions SET source_title = NULL WHERE session_id LIKE '%old-session'",
 	);
+	await pool.query(
+		"DELETE FROM vault_traces.__trace_engine_migrations WHERE version = '0005_payload_columns_only.sql'",
+	);
+	const client = await pool.connect();
+	try {
+		await installTraceProjections(client, "vault_traces");
+	} finally {
+		client.release();
+	}
+	const [turn] = (
+		await pool.query(
+			"SELECT turn_id FROM vault_traces.trace_events WHERE event_id = 'old-turn'",
+		)
+	).rows;
+	assert.equal(turn.turn_id, "turn-1");
 	await store.ingest(deviceCaller, policy.revision, [
 		typed("new-usage", 2, "token_usage_record", {
 			turn_id: "turn-1",
@@ -1339,15 +1357,13 @@ test("vault owner isolation, revocation, disabled-member retention, and secret-f
 	assert.equal(audit.items.length, 1);
 	assert.ok(audit.nextCursor);
 	const actions = (await store.listAudit(adminCaller)).items;
-	const newestFirst = [...actions].sort(
-		(left, right) =>
-			right.createdAt.getTime() - left.createdAt.getTime() ||
-			right.id.localeCompare(left.id),
-	);
-	assert.deepEqual(
-		actions.map((row) => row.id),
-		newestFirst.map((row) => row.id),
-	);
+	// The store orders by microsecond timestamps, then ID; createdAt keeps only
+	// milliseconds, so entries within one millisecond can't be ordered here.
+	for (const [index, row] of actions.entries())
+		assert.ok(
+			index === 0 ||
+				actions[index - 1]!.createdAt.getTime() >= row.createdAt.getTime(),
+		);
 	const secondPage = await store.listAudit(adminCaller, {
 		limit: 1,
 		after: audit.nextCursor,
