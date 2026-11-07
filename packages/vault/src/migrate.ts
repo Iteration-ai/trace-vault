@@ -1,7 +1,10 @@
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { installTraceProjections } from "iteration-trace-postgres/migrate";
+import {
+	backfillTracePayloadFields,
+	installTraceProjections,
+} from "iteration-trace-postgres/migrate";
 import { Pool } from "pg";
 import * as z from "zod";
 import { storageSchema } from "./trace-storage.js";
@@ -44,6 +47,7 @@ export async function migrateVault(
 				if (rows[0]?.canonical) {
 					await installTraceProjections(client, storageSchema);
 					await upgradeVaultStorage(client);
+					await backfillTracePayloadFields(client, storageSchema);
 				}
 			} finally {
 				await database.execute(sql`select pg_advisory_unlock(186004595, 1)`);
