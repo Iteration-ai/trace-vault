@@ -31,11 +31,10 @@ const storedExternally = (eventType: TraceEventType) =>
 	eventType !== "token_usage_record";
 
 /**
- * Packs a batch's payloads into one object per session, each event a separate
- * gzip member so a reader can fetch one event by byte range or a whole session
- * at once. Keys depend only on the stream, session and payload contents, so a
- * retried upload rewrites the same object. Hosts store the objects before
- * calling ingestTraceBatch with the returned locations.
+ * Packs a batch's payloads into one object per session, one gzip member per
+ * event, readable by byte range or whole. Keys depend only on the stream,
+ * session and payloads, so a retried upload rewrites the same object. Hosts
+ * store the objects, then pass the locations to ingestTraceBatch.
  */
 export function packTracePayloads(
 	context: TraceStorageContext,

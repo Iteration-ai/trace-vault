@@ -593,8 +593,8 @@ test("payloads stored outside PostgreSQL project like stored ones, and their obj
 		).rows;
 	const inline = await projected("inline");
 	assert.deepEqual(
-		(await projected("external")).map(({ external: stored, ...row }) => row),
-		inline.map(({ external: stored, ...row }) => row),
+		(await projected("external")).map(({ external: _stored, ...row }) => row),
+		inline.map(({ external: _stored, ...row }) => row),
 	);
 	assert.deepEqual(
 		(await projected("external")).map((row) => [row.event_type, row.external]),
