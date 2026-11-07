@@ -43,6 +43,13 @@
       "when": 1794083952173,
       "tag": "0005_external_payloads",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794087223443,
+      "tag": "0006_online_payload_indexes",
+      "breakpoints": true
     }
   ]
 }
