@@ -6,6 +6,7 @@ const migrations = [
 	"0002_session_presentation.sql",
 	"0003_payload_fields.sql",
 	"0004_external_payloads.sql",
+	"0005_payload_columns_only.sql",
 ];
 
 function schemaNamespace(schema) {
