@@ -1339,15 +1339,13 @@ test("vault owner isolation, revocation, disabled-member retention, and secret-f
 	assert.equal(audit.items.length, 1);
 	assert.ok(audit.nextCursor);
 	const actions = (await store.listAudit(adminCaller)).items;
-	const newestFirst = [...actions].sort(
-		(left, right) =>
-			right.createdAt.getTime() - left.createdAt.getTime() ||
-			right.id.localeCompare(left.id),
-	);
-	assert.deepEqual(
-		actions.map((row) => row.id),
-		newestFirst.map((row) => row.id),
-	);
+	// The store orders by microsecond timestamps, then ID; createdAt keeps only
+	// milliseconds, so entries within one millisecond can't be ordered here.
+	for (const [index, row] of actions.entries())
+		assert.ok(
+			index === 0 ||
+				actions[index - 1]!.createdAt.getTime() >= row.createdAt.getTime(),
+		);
 	const secondPage = await store.listAudit(adminCaller, {
 		limit: 1,
 		after: audit.nextCursor,
