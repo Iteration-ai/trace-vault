@@ -466,6 +466,57 @@ test("payload fields other rows read are stored as columns on write and backfill
 	assert.ok(progress.rows[0]?.completed_at);
 });
 
+test("rows without payload-field columns are read from their payloads until filled", {
+	skip: !databaseUrl,
+}, async (context) => {
+	const { store, pool, deviceCaller, policy } = await fixture(context);
+	const base = event("old-meta", policy.revision, "old-session");
+	const typed = (
+		eventId: string,
+		sequence: number,
+		eventType: TraceEvent["eventType"],
+		payload: TraceEvent["payload"],
+	): TraceEvent => ({ ...base, eventId, sequence, eventType, payload });
+	await store.ingest(deviceCaller, policy.revision, [
+		{ ...base, payload: { ...base.payload, title: "Old title" } },
+		typed("old-turn", 1, "turn_context", {
+			turn_id: "turn-1",
+			model: "old-model",
+		}),
+	]);
+	// Rows written before SQL 0003 have no columns until filled.
+	await pool.query(
+		"ALTER TABLE vault_traces.trace_events DISABLE TRIGGER trace_events_project_payload_fields",
+	);
+	await pool.query(`UPDATE vault_traces.trace_events SET turn_id = NULL,
+		meta_title = NULL, meta_cwd = NULL, meta_repository_url = NULL`);
+	await pool.query(
+		"ALTER TABLE vault_traces.trace_events ENABLE TRIGGER trace_events_project_payload_fields",
+	);
+	await pool.query(
+		"UPDATE vault_traces.trace_sessions SET source_title = NULL WHERE session_id LIKE '%old-session'",
+	);
+	await store.ingest(deviceCaller, policy.revision, [
+		typed("new-usage", 2, "token_usage_record", {
+			turn_id: "turn-1",
+			usage: { input_tokens: 1, output_tokens: 1 },
+		}),
+		typed("new-prompt", 3, "user_message", { text: "Continue" }),
+	]);
+	const [usage] = (
+		await pool.query(
+			"SELECT model FROM vault_traces.trace_events WHERE event_id = 'new-usage'",
+		)
+	).rows;
+	assert.equal(usage.model, "old-model");
+	const [session] = (
+		await pool.query(
+			"SELECT source_title FROM vault_traces.trace_sessions WHERE session_id LIKE '%old-session'",
+		)
+	).rows;
+	assert.equal(session.source_title, "Old title");
+});
+
 test("payloads stored outside PostgreSQL project like stored ones, and their objects are returned on deletion", {
 	skip: !databaseUrl,
 }, async (context) => {
