@@ -10,6 +10,7 @@ import type {
 	TraceStorageContext,
 	TraceTransaction,
 } from "./contracts.js";
+import type { TracePayloadLocation } from "./external-payloads.js";
 import { assertTraceSchema } from "./schema.js";
 import { prepareTraceIngestRows } from "./trace-ingest-rows.js";
 
@@ -25,7 +26,12 @@ const changedEvent = z.object({
 	ingestedAt: z.string(),
 });
 
-/** The host authenticates and validates projects before calling in its transaction. */
+/**
+ * The host authenticates and validates projects before calling in its
+ * transaction. With payload locations from packTracePayloads, whose objects
+ * the host stored first, those payloads are projected and not kept in
+ * PostgreSQL.
+ */
 export async function ingestTraceBatch<TTransaction extends TraceTransaction>(
 	transaction: TTransaction,
 	schema: string,
@@ -33,6 +39,7 @@ export async function ingestTraceBatch<TTransaction extends TraceTransaction>(
 	batch: TraceEventBatch,
 	extension?: TraceIngestExtension<TTransaction>,
 	receivedAtByEventId?: ReadonlyMap<string, string>,
+	payloadLocations?: ReadonlyMap<string, TracePayloadLocation>,
 ): Promise<TraceIngestChanges> {
 	assertTraceSchema(schema);
 	const events = sql`${sql.identifier(schema)}.${sql.identifier("trace_events")}`;
@@ -40,10 +47,14 @@ export async function ingestTraceBatch<TTransaction extends TraceTransaction>(
 	const { rows, sessionIds, acceptedEventIds } = prepareTraceIngestRows(batch);
 	const receivedRows = rows.map((row) => {
 		const receivedAt = receivedAtByEventId?.get(row.event_id);
+		const location = payloadLocations?.get(row.event_id);
 		return {
 			...row,
 			ingested_at:
 				receivedAt === undefined ? null : z.iso.datetime().parse(receivedAt),
+			payload_object: location?.object ?? null,
+			payload_offset: location?.offset ?? null,
+			payload_length: location?.length ?? null,
 		};
 	});
 	const sessionLockKeys = sessionIds.map(
@@ -56,13 +67,16 @@ export async function ingestTraceBatch<TTransaction extends TraceTransaction>(
 	const changed = await transaction.execute(sql`
 		INSERT INTO ${events} AS stored (
 			organization_id, project_id, device_id, user_id, event_id,
-			session_id, sequence, call_id, occurred_at, event_type, payload, run, ingested_at
+			session_id, sequence, call_id, occurred_at, event_type, payload, run, ingested_at,
+			payload_object, payload_offset, payload_length
 		)
 		SELECT ${context.organizationId}::uuid, e.project_id, ${context.deviceId}::uuid, ${context.userId}::uuid,
-			e.event_id, e.session_id, e.sequence, e.call_id, e.occurred_at, e.event_type, e.payload, e.run, coalesce(e.ingested_at, now())
+			e.event_id, e.session_id, e.sequence, e.call_id, e.occurred_at, e.event_type, e.payload, e.run, coalesce(e.ingested_at, now()),
+			e.payload_object, e.payload_offset, e.payload_length
 		FROM jsonb_to_recordset(${JSON.stringify(receivedRows)}::jsonb) AS e(
 			event_id text, session_id text, sequence bigint, call_id text,
-			project_id uuid, occurred_at timestamptz, event_type text, payload jsonb, run jsonb, ingested_at timestamptz
+			project_id uuid, occurred_at timestamptz, event_type text, payload jsonb, run jsonb, ingested_at timestamptz,
+			payload_object text, payload_offset bigint, payload_length integer
 		)
 		WHERE NOT EXISTS (
 			SELECT 1 FROM ${deletions} AS deleted
@@ -102,7 +116,7 @@ export async function ingestTraceBatch<TTransaction extends TraceTransaction>(
 			WHERE usage.organization_id = ${context.organizationId}::uuid AND usage.device_id = ${context.deviceId}::uuid
 				AND usage.usage_at IS NOT NULL AND usage.model IS NULL
 				AND usage.session_id IN (SELECT jsonb_array_elements_text(${JSON.stringify(sessionIds)}::jsonb))
-				AND usage.payload->>'turn_id' IN (SELECT jsonb_array_elements_text(${JSON.stringify(turnIds)}::jsonb))
+				AND usage.turn_id IN (SELECT jsonb_array_elements_text(${JSON.stringify(turnIds)}::jsonb))
 		`);
 	}
 	const changes: TraceIngestChanges = {

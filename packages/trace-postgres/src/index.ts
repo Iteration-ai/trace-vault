@@ -2,6 +2,13 @@ export * from "./contracts.js";
 export { ingestTraceBatch } from "./ingest.js";
 export { deleteTraceSession } from "./delete-session.js";
 export {
+	packTracePayloads,
+	readTracePayload,
+	readTracePayloadObject,
+	type TracePayloadLocation,
+	type TracePayloadObject,
+} from "./external-payloads.js";
+export {
 	normalizeJsonbPayload,
 	normalizeJsonbText,
 } from "./normalize-jsonb-payload.js";

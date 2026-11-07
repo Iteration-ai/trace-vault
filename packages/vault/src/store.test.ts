@@ -6,6 +6,13 @@ import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { TraceEvent } from "iteration-trace-contracts";
+import { drizzle } from "drizzle-orm/node-postgres";
+import {
+	deleteTraceSession,
+	ingestTraceBatch,
+	packTracePayloads,
+	readTracePayload,
+} from "iteration-trace-postgres";
 import { backfillTracePayloadFields } from "iteration-trace-postgres/migrate";
 import { Pool } from "pg";
 import { migrateVault } from "./migrate.js";
@@ -457,6 +464,139 @@ test("payload fields other rows read are stored as columns on write and backfill
 		"SELECT completed_at FROM vault_traces.__trace_engine_backfills WHERE name = '0003_payload_fields'",
 	);
 	assert.ok(progress.rows[0]?.completed_at);
+});
+
+test("payloads stored outside PostgreSQL project like stored ones, and their objects are returned on deletion", {
+	skip: !databaseUrl,
+}, async (context) => {
+	const { store, pool, deviceCaller, policy } = await fixture(context);
+	await store.ingest(deviceCaller, policy.revision, [
+		event("stream", policy.revision),
+	]);
+	const [stream] = (
+		await pool.query(
+			"SELECT organization_id, user_id, device_id FROM vault_traces.trace_events LIMIT 1",
+		)
+	).rows;
+	const storage = {
+		organizationId: stream.organization_id,
+		userId: stream.user_id,
+		deviceId: stream.device_id,
+		source: "codex" as const,
+	};
+	const session = (sessionId: string): TraceEvent[] => {
+		const typed = (
+			eventId: string,
+			sequence: number,
+			eventType: TraceEvent["eventType"],
+			payload: TraceEvent["payload"],
+		): TraceEvent => ({
+			...event(`${sessionId}-${eventId}`, policy.revision, sessionId),
+			projectId: null,
+			sequence,
+			eventType,
+			payload,
+		});
+		return [
+			typed("meta", 0, "session_meta", {
+				title: "Fix the build",
+				cwd: "/synthetic/repository",
+				git: { repository_url: "git@github.com:synthetic/company.git" },
+			}),
+			typed("turn", 1, "turn_context", { turn_id: "turn-1", model: "model-1" }),
+			typed("prompt", 2, "user_message", { text: "Please fix the build" }),
+			typed("tool", 3, "tool_call", { name: "exec", input: "pnpm build" }),
+			typed("usage", 4, "token_usage_record", {
+				turn_id: "turn-1",
+				usage: { input_tokens: 10, output_tokens: 2 },
+			}),
+		];
+	};
+	const database = drizzle(pool);
+	const external = session("external");
+	const packed = packTracePayloads(storage, { events: external });
+	await database.transaction((tx) =>
+		ingestTraceBatch(tx, "vault_traces", storage, {
+			events: session("inline"),
+		}),
+	);
+	await database.transaction((tx) =>
+		ingestTraceBatch(
+			tx,
+			"vault_traces",
+			storage,
+			{ events: external },
+			undefined,
+			undefined,
+			packed.locations,
+		),
+	);
+	const projected = async (sessionId: string) =>
+		(
+			await pool.query(
+				`SELECT event_type, payload IS NULL AS external, display_text, tool_name, model,
+					usage_output_tokens, turn_id, meta_title, message_preview
+				FROM vault_traces.trace_events WHERE session_id = $1 ORDER BY sequence`,
+				[sessionId],
+			)
+		).rows;
+	const inline = await projected("inline");
+	assert.deepEqual(
+		(await projected("external")).map(({ external: stored, ...row }) => row),
+		inline.map(({ external: stored, ...row }) => row),
+	);
+	assert.deepEqual(
+		(await projected("external")).map((row) => [row.event_type, row.external]),
+		[
+			["session_meta", true],
+			["turn_context", true],
+			["user_message", true],
+			["tool_call", true],
+			["token_usage_record", false],
+		],
+	);
+	assert.equal(inline.at(-1)?.model, "model-1");
+	const presentation = async (sessionId: string) =>
+		(
+			await pool.query(
+				`SELECT source_title, source_cwd, source_repository_url,
+					first_user_message_preview, event_count
+				FROM vault_traces.trace_sessions WHERE session_id = $1`,
+				[sessionId],
+			)
+		).rows;
+	assert.deepEqual(
+		await presentation("external"),
+		await presentation("inline"),
+	);
+	assert.equal(
+		(await presentation("inline"))[0]?.source_title,
+		"Fix the build",
+	);
+	const [location] = (
+		await pool.query(
+			`SELECT payload_object, payload_offset, payload_length FROM vault_traces.trace_events
+			WHERE event_id = 'external-prompt'`,
+		)
+	).rows;
+	const [object] = packed.objects;
+	assert.equal(location.payload_object, object?.key);
+	assert.deepEqual(
+		readTracePayload(
+			object!.body.subarray(
+				Number(location.payload_offset),
+				Number(location.payload_offset) + location.payload_length,
+			),
+		),
+		{ text: "Please fix the build" },
+	);
+	const deleted = await database.transaction((tx) =>
+		deleteTraceSession(tx, "vault_traces", storage, "external"),
+	);
+	assert.deepEqual(deleted, {
+		status: "deleted",
+		payloadObjects: [object?.key],
+	});
 });
 
 test("session titles fall back to the first nonempty user message, never assistant text or internal IDs", {

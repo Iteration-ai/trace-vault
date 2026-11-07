@@ -33,7 +33,7 @@ export async function deleteTraceSession<TTransaction extends TraceTransaction>(
 		.parse(result.rows);
 	if (!state) throw new Error("Session deletion state is missing.");
 	if (!state.present && !state.deleted && !options.tombstoneMissing)
-		return { status: "not_found" };
+		return { status: "not_found", payloadObjects: [] };
 	await transaction.execute(sql`
 		INSERT INTO ${deletions} (organization_id, user_id, session_id)
 		VALUES (${context.organizationId}::uuid, ${context.userId}::uuid, ${sessionId})
@@ -42,7 +42,16 @@ export async function deleteTraceSession<TTransaction extends TraceTransaction>(
 	// Native hosts can retain event-ID tombstones and audit metadata before
 	// cascading foreign keys remove their receipts with the canonical events.
 	await beforeDelete?.(transaction);
-	await transaction.execute(sql`DELETE FROM ${events} WHERE ${scope}`);
+	const deleted = await transaction.execute(sql`
+		WITH removed AS (DELETE FROM ${events} WHERE ${scope} RETURNING payload_object)
+		SELECT DISTINCT payload_object FROM removed WHERE payload_object IS NOT NULL
+	`);
 	await transaction.execute(sql`DELETE FROM ${sessions} WHERE ${scope}`);
-	return { status: state.deleted ? "already_deleted" : "deleted" };
+	return {
+		status: state.deleted ? "already_deleted" : "deleted",
+		payloadObjects: z
+			.array(z.object({ payload_object: z.string() }))
+			.parse(deleted.rows)
+			.map((row) => row.payload_object),
+	};
 }

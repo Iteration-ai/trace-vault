@@ -36,6 +36,13 @@
       "when": 1794082332068,
       "tag": "0004_payload_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794083952173,
+      "tag": "0005_external_payloads",
+      "breakpoints": true
     }
   ]
 }
